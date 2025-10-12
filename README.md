@@ -1,0 +1,1 @@
+BUILD: `/Library/Frameworks/Python.framework/Versions/3.10/bin/pyinstaller --onefile --windowed --name=ConvertApp convert.py`
