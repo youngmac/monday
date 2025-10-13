@@ -12,6 +12,7 @@ import os
 import platform
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+import sys
 
 class NumberedCanvas(canvas.Canvas):
     def __init__(self, *args, **kwargs):
@@ -255,7 +256,7 @@ def generate_packing_slip(c, customer_data, boxed=False):
             total = str(len(customer_data['items']))
         total_items_width = c.stringWidth(total, "Helvetica-Bold", 40)
         text_height = 40
-        x, y = margin, margin
+        x, y = margin, margin + 20
         c.drawString(x, y, total)
 
         if boxed:
@@ -279,7 +280,7 @@ def generate_packing_slip(c, customer_data, boxed=False):
         c.line(margin, y_start, width - margin, y_start)
         y_start -= 17
 
-        if y_start < margin + 50:
+        if y_start < margin + 60:
             draw_footer()
             c.showPage()
             num_pages += 1
@@ -293,8 +294,14 @@ def generate_packing_slip(c, customer_data, boxed=False):
     
 # GUI
 def main():
-    # Current directory
-    current_dir = Path('.')
+    current_dir = None
+
+    if getattr(sys, 'frozen', False):
+        # Running from a bundled .exe (like PyInstaller)
+        current_dir = Path(os.path.dirname(sys.executable))
+    else:
+        # Running from a .py file
+        current_dir = Path('.')
 
     # Get all Excel files (.xlsx and .xls)
     excel_files = list(current_dir.glob("*.xlsx")) + list(current_dir.glob("*.xls"))
@@ -327,7 +334,6 @@ def main():
         grouped_data1 = group_data(data1)
         min_date0, max_date0 = get_date_range(grouped_data0)
         min_date1, max_date1 = get_date_range(grouped_data1)
-        print(min_date0, max_date0, min_date1, max_date1)
         # switch if out of order
         if max_date0 > max_date1:
             data0, data1 = data1, data0
@@ -364,12 +370,6 @@ def main():
         c.set_groups(groups)
         c.save()
         
-
-
-        
-
-
-    
     print(f"PDF created: {filename}")
 
     # Open the generated PDF file
