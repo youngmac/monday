@@ -4,14 +4,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-import tkinter as tk
-from tkinter import filedialog, messagebox
 from pathlib import Path
 from datetime import datetime
 import os
-import platform
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
 import sys
 
 class NumberedCanvas(canvas.Canvas):
@@ -292,7 +287,6 @@ def generate_packing_slip(c, customer_data, boxed=False):
     return num_pages
 
     
-# GUI
 def main():
     current_dir = None
 
@@ -372,90 +366,7 @@ def main():
         
     print(f"PDF created: {filename}")
 
-    # Open the generated PDF file
     os.system(f'open "{filename}"')
-    # root = tk.Tk()
-    # root.title("File Upload & Process")
-    # root.geometry("850x450")
-
-    # selected_file = tk.StringVar()
-
-    # def upload_file():
-    #     file_path = filedialog.askopenfilename()
-    #     if file_path:
-    #         selected_file.set(file_path)
-    #         file_label.config(text=f"Selected: {file_path}")
-
-    # def sort_grouped_data(grouped_data):
-    #     def item_count(items):
-    #         return len(items)
-
-    #     def earliest_date(items):
-    #         dates = []
-    #         for item in items:
-    #             try:
-    #                 dates.append(datetime.strptime(item['time'], '%Y-%m-%d %H:%M:%S'))
-    #             except:
-    #                 continue
-    #         return min(dates) if dates else datetime.max
-
-    #     def get_sort_key_func(key):
-    #         if key == "Name":
-    #             return lambda x: x[1]["name"].lower()
-    #         elif key == "Username":
-    #             return lambda x: x[1]["username"].lower()
-    #         elif key == "Size":
-    #             return lambda x: item_count(x[1]["items"])
-    #         elif key == "Earliest Order Date":
-    #             return lambda x: earliest_date(x[1]["items"])
-    #         else:
-    #             return None
-
-    #     items = list(grouped_data.items())
-
-    #     # Apply sorting from lowest to highest priority (reversed)
-    #     for key, order in reversed(list(zip(["Size", "Name"], [ "Descending", "Ascending"]))):
-    #         key_func = get_sort_key_func(key)
-    #         if key_func:
-    #             reverse = order == "Descending"
-    #             items.sort(key=key_func, reverse=reverse)
-
-    #     return dict(items)
-
-    # def run_function():
-    #     file_path = selected_file.get()
-    #     if file_path:
-    #         try:
-    #             data = excel_to_dicts(Path(file_path))
-    #             grouped_data = group_data(data)
-    #             sorted_grouped_data = sort_grouped_data(grouped_data)
-
-    #             # TODO CHANGE NAME TO DATE 
-    #             # Generate PDFs
-    #             filename = f"{file_path}_output.pdf"
-    #             c = canvas.Canvas(filename, pagesize=letter)
-    #             for key in sorted_grouped_data:
-    #                 generate_packing_slip(c, sorted_grouped_data[key])
-    #                 c.showPage()
-    #             c.save()
-
-    #             messagebox.showinfo("Success", f"PDF created: {filename}")
-    #         except Exception as e:
-    #             messagebox.showerror("Error", f"An error occurred:\n{e}")
-    #     else:
-    #         messagebox.showwarning("No file", "Please upload a file first.")
-
-    # # GUI Layout
-    # upload_btn = tk.Button(root, text="Upload file", command=upload_file)
-    # upload_btn.pack(pady=10)
-
-    # file_label = tk.Label(root, text="No file selected")
-    # file_label.pack(pady=5)
-
-    # process_btn = tk.Button(root, text="Create PDF in folder", command=run_function)
-    # process_btn.pack(pady=20)
-
-    # root.mainloop()
 
 
 if __name__ == "__main__":
