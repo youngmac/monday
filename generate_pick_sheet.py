@@ -100,6 +100,8 @@ def generate_pick_sheet(c, customer_data, boxed=False):
     for item in customer_data['items']:
         c.setFont("Helvetica", 14)
         title = item['title']
+        if ("hold" in title.lower() or "cancel" in title.lower()):
+            c.setFont("Helvetica-Bold", 14)
         c.rect(margin, y_start - 1, 12, 12, stroke=1, fill=0)
         c.drawString(margin + 20, y_start, title)
         num_items += 1

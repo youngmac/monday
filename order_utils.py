@@ -103,15 +103,13 @@ def sort_grouped_data(grouped_data):
         dict: Sorted data with 'uid' assigned to each group.
     """
 
-    from datetime import datetime
-
 def sort_grouped_data(grouped_data):
-    def item_count(items):
-        return len(items)
+    def item_count(data):
+        return len(data)
 
-    def earliest_date(items):
+    def earliest_date(data):
         dates = []
-        for item in items:
+        for item in data:
             try:
                 dates.append(datetime.strptime(str(item['time']), '%Y-%m-%d %H:%M:%S'))
             except:
@@ -130,17 +128,28 @@ def sort_grouped_data(grouped_data):
         else:
             return None
 
-    items = list(grouped_data.items())
+    data = list(grouped_data.items())
 
     # Apply sorting from lowest to highest priority (reversed)
     for key, order in reversed(list(zip(["Size", "Name"], ["Descending", "Ascending"]))):
         key_func = get_sort_key_func(key)
         if key_func:
             reverse = order == "Descending"
-            items.sort(key=key_func, reverse=reverse)
+            data.sort(key=key_func, reverse=reverse)
 
     # Assign UID after sorting
-    for i, (key, value) in enumerate(items):
+    for i, (key, value) in enumerate(data):
         value["uid"] = i + 1
 
-    return dict(items)
+        # Sort items: "hold" or "cancel" first, then by title
+        value["items"].sort(
+            key=lambda item: (
+                0 if (
+                    "hold" in item["title"].lower() or
+                    "cancel" in item["title"].lower()
+                ) else 1,
+                item["title"].lower()
+            )
+        )
+
+    return dict(data)

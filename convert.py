@@ -3,6 +3,7 @@ from reportlab.lib.pagesizes import letter
 from generate_pick_sheet import generate_pick_sheet
 from numbered_canvas import NumberedCanvas
 from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range
+from weather import get_alerting_forecast
 import os
 import sys
 
@@ -33,6 +34,8 @@ def main():
         groups = []
         for key in sorted_grouped_data:
             groups.append(generate_pick_sheet(c, sorted_grouped_data[key]))
+            # print(sorted_grouped_data[key]['address'])
+            # print(get_alerting_forecast(sorted_grouped_data[key]['address']))
             c.showPage()
         c.set_groups(groups)
         c.save()
