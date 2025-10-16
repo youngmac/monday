@@ -92,6 +92,10 @@ def get_date_range(grouped_data: dict) -> tuple[datetime | None, datetime | None
 
     return min_date, max_date
 
+def containts_important_word(title: str) -> bool:
+    important_words = ["hold", "cancel", "ups", "2-day", "2 day", "overnight", "express", "priority"]
+    return any(word in title.lower() for word in important_words)
+
 def sort_grouped_data(grouped_data):
     """
     Sorts grouped order data by size (desc) and name (asc), then assigns a UID to each group.
@@ -102,8 +106,6 @@ def sort_grouped_data(grouped_data):
     Returns:
         dict: Sorted data with 'uid' assigned to each group.
     """
-
-def sort_grouped_data(grouped_data):
     def item_count(data):
         return len(data)
 
@@ -144,10 +146,7 @@ def sort_grouped_data(grouped_data):
         # Sort items: "hold" or "cancel" first, then by title
         value["items"].sort(
             key=lambda item: (
-                0 if (
-                    "hold" in item["title"].lower() or
-                    "cancel" in item["title"].lower()
-                ) else 1,
+                0 if (containts_important_word(item["title"])) else 1,
                 item["title"].lower()
             )
         )

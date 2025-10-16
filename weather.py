@@ -1,27 +1,43 @@
 import requests
 from datetime import datetime, timedelta
+from geopy.geocoders import Nominatim
+from config import MAX_ACCEPTABLE_TEMP, MIN_ACCEPTABLE_TEMP
+import re
+
+MAPBOX_API_KEY = "pk.eyJ1IjoiZ29uZnJlZWNzcyIsImEiOiJjbWdweG1tMnEyZWtvMm5vazJtZW4yeTVrIn0.L8xXekK6sMvGCDnlfeAK7Q"
+BASE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
+
+def extract_zip(address):
+    match = re.search(r"\b\d{5}(?:-\d{4})?\b", address)
+    if match:
+        return match.group()
+    else:
+        return None
 
 def get_coordinates(address):
-    base_url = "https://api.mapbox.com/geocoding/v5/mapbox.places"
-    url = f"{base_url}/{address}.json"
+    url = f"{BASE_URL}/{address}.json"
     
     params = {
-        "access_token": "pk.eyJ1IjoiZ29uZnJlZWNzcyIsImEiOiJjbWdweG1tMnEyZWtvMm5vazJtZW4yeTVrIn0.L8xXekK6sMvGCDnlfeAK7Q",
+        "access_token": MAPBOX_API_KEY,
         "limit": 1  # Only get the top result
     }
 
     response = requests.get(url, params=params)
     data = response.json()
 
+    # try generating coords with adddress
     if response.status_code == 200 and data["features"]:
         coords = data["features"][0]["geometry"]["coordinates"]
         return coords[1], coords[0]  # Return (lat, lon)
-    else:
-        return None, None
+    else: # fallback to zip
+        zip = extract_zip(address)
+        geolocator = Nominatim(user_agent="weather_app")
+        location = geolocator.geocode(zip)
+        if location:
+            return location.latitude, location.longitude
+        raise Exception("Error fetching coordinates")
 
 def get_forecast(lat, lon):
-    if lat is None or lon is None:
-        raise ValueError("Invalid latitude or longitude provided.")
     """
     Fetch 10-day forecast from Open-Meteo API using latitude and longitude.
     """
@@ -47,11 +63,13 @@ def get_forecast(lat, lon):
 
 def check_extreme_temps(forecast):
     """
-    Check if any daily temperature is over 80 or under 30°F.
+    Check if any daily temperature is over 88 or under 40°F.
     """
+    if not forecast or "daily" not in forecast:
+        raise Exception("Error fetching forecast data")
     days = forecast["daily"]
     for max_temp, min_temp in zip(days["temperature_2m_max"], days["temperature_2m_min"]):
-        if max_temp > 80 or min_temp < 30:
+        if max_temp > MAX_ACCEPTABLE_TEMP or min_temp < MIN_ACCEPTABLE_TEMP:
             return days  # Return full daily forecast if any extreme found
     return None
 
@@ -61,18 +79,3 @@ def get_alerting_forecast(address):
     forecast = get_forecast(lat, lon)
     result = check_extreme_temps(forecast)
     return result
-
-
-# 🔍 Example usage:
-if __name__ == "__main__":
-    address = "Dallas, TX"  # Replace with any address
-    try:
-        forecast = get_alerting_forecast(address)
-        if forecast:
-            print("⚠️ Extreme temperatures found:")
-            for date, tmax, tmin in zip(forecast["time"], forecast["temperature_2m_max"], forecast["temperature_2m_min"]):
-                print(f"{date}: High {tmax}°F, Low {tmin}°F")
-        else:
-            print("✅ No extreme temperatures in the 10-day forecast.")
-    except Exception as e:
-        print(f"Error: {e}")

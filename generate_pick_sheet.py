@@ -1,40 +1,93 @@
 from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
+from weather import get_alerting_forecast
+import config
 
 def generate_pick_sheet(c, customer_data, boxed=False):
     """
     Generate a pick sheet PDF page(s) for a customer.
-
-    Args:
-        c: ReportLab canvas object.
-        customer_data (dict): Contains 'name', 'username', 'address', 'items', and optional 'uid' and 'num_items'.
-        boxed (bool): If True, draws a box around the UID and item total.
-
-    Returns:
-        int: Number of pages generated.
     """
+
     num_pages = 1
     width, height = letter
-    margin = 30
-    y_start = height - margin - 30
+    y_start = height - config.MARGIN - 30
+
+    def draw_forecast_chart(forecast, x=50, y=100, width=500):
+        """
+        Draws a simple forecast chart with:
+        - First and last dates include full date (e.g., Mon, 10/13)
+        - Middle dates show only weekday (e.g., Tue)
+        - Shows all max temps if any day is > 88
+        - Shows all min temps if any day is < 40
+        """
+        if not forecast or "time" not in forecast:
+            c.setFont(*config.NO_FORCAST_DATA_FONT)
+            c.drawString(x, y, "No forecast data available. Please look up weather manually!")
+            return
+
+        dates = forecast["time"]
+        max_temps = forecast["temperature_2m_max"]
+        min_temps = forecast["temperature_2m_min"]
+
+        show_max = any(t > config.MAX_ACCEPTABLE_TEMP for t in max_temps)
+        show_min = any(t < config.MIN_ACCEPTABLE_TEMP for t in min_temps)
+
+        if not (show_max or show_min):
+            return  # Nothing to draw
+
+        num_days = len(dates)
+        day_spacing = (width + 50) / num_days
+
+        c.setFont(*config.FORECAST_LABEL_FONT)
+
+        for i in range(num_days):
+            date_obj = datetime.strptime(dates[i], "%Y-%m-%d")
+
+            # Show full date on first and last day
+            if i == 0 or i == num_days - 1:
+                label = date_obj.strftime("%a, %m/%d")
+            else:
+                label = date_obj.strftime("%a")
+
+            x_pos = x + i * day_spacing
+
+            # Draw day label
+            c.drawString(x_pos, y + 15, label)
+
+            # Build temp string
+            temp_label = ""
+            if show_max:
+                temp_label += f"{int(max_temps[i])}°"
+            if show_min:
+                if temp_label:
+                    temp_label += " / "
+                temp_label += f"{int(min_temps[i])}°"
+
+            # Draw temp label
+            if (int(temp_label) > config.MAX_ACCEPTABLE_TEMP or int(temp_label) < config.MIN_ACCEPTABLE_TEMP):
+                c.setFont(*config.EXTREME_TEMP_LABEL_FONT)
+            else:
+                c.setFont(*config.TEMP_LABEL_FONT)
+            c.drawString(x_pos, y, temp_label)
+            c.setFont(*config.FORECAST_LABEL_FONT)
 
     def draw_header():
         nonlocal y_start
         c.setFont("Helvetica-Bold", 20)
-        c.drawString(margin, y_start, customer_data['username'] + " ")
+        c.drawString(config.MARGIN, y_start, customer_data['username'] + " ")
 
         c.setFont("Helvetica", 14)
         username_width = c.stringWidth(customer_data['username'] + " ", "Helvetica-Bold", 20)
-        c.drawString(margin + username_width, y_start, customer_data['name'])
+        c.drawString(config.MARGIN + username_width, y_start, customer_data['name'])
 
         c.setFont("Helvetica", 100)
         uid_text = "{:03}".format(customer_data.get('uid', ''))
         uid_width = c.stringWidth(uid_text, "Helvetica", 100)
-        c.drawString(width - margin - uid_width, y_start - 65, uid_text)
+        c.drawString(width - config.MARGIN - uid_width, y_start - 65, uid_text)
 
         if boxed:
-            x = width - margin - uid_width
+            x = width - config.MARGIN - uid_width
             y = y_start - 70
             padding = 5
             c.setLineWidth(5)
@@ -43,7 +96,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
 
         y_start -= 25
         c.setFont("Helvetica", 14)
-        c.drawString(margin, y_start, customer_data['address'])
+        c.drawString(config.MARGIN, y_start, customer_data['address'])
 
         def get_order_date_range(items):
             dates = []
@@ -58,31 +111,39 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         if min_date and max_date:
             y_start -= 25
             c.setFont("Helvetica-Bold", 18)
-            c.drawString(margin, y_start, max_date.strftime("%A"))
+            c.drawString(config.MARGIN, y_start, max_date.strftime("%A"))
 
             cur_width = c.stringWidth(max_date.strftime("%A"), "Helvetica-Bold", 18)
             c.setFont("Helvetica", 14)
-            c.drawString(margin + cur_width, y_start, ", " + max_date.strftime("%b %d"))
+            c.drawString(config.MARGIN + cur_width, y_start, ", " + max_date.strftime("%b %d"))
 
             if min_date != max_date:
                 cur_width += c.stringWidth(", " + max_date.strftime("%b %d"), "Helvetica", 14)
-                c.drawString(margin + cur_width, y_start, " to ")
+                c.drawString(config.MARGIN + cur_width, y_start, " to ")
                 cur_width += c.stringWidth(" to ", "Helvetica", 14)
-                c.drawString(margin + cur_width, y_start, min_date.strftime("%A, %b %d"))
+                c.drawString(config.MARGIN + cur_width, y_start, min_date.strftime("%A, %b %d"))
+
+        # Add the weather forecast chart
+        forecast = get_alerting_forecast(customer_data['address'])
+        if forecast or forecast == {}:
+            y_start -= 50
+            draw_forecast_chart(forecast, x=config.MARGIN, y=y_start)
+            y_start += 20
 
         y_start -= 30
         c.setFont("Helvetica-Bold", 14)
         c.setStrokeColor(colors.black)
-        c.line(margin, y_start, width - margin, y_start)
+        c.line(config.MARGIN, y_start, width - config.MARGIN, y_start)
         y_start -= 17
 
     def draw_footer():
+        # Total number items/number items on this page
         nonlocal num_items
         c.setFont("Helvetica-Bold", 40)
 
         total = str(customer_data.get('num_items', len(customer_data['items'])))
         total_items_width = c.stringWidth(total, "Helvetica-Bold", 40)
-        x, y = margin, margin + 20
+        x, y = config.MARGIN, config.MARGIN + 20
         c.drawString(x, y, total)
 
         if boxed:
@@ -94,27 +155,44 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         label_x = x + total_items_width + (8 if boxed else 0)
         c.drawString(label_x, y, " " + str(num_items))
 
+        # Draw CP and HP section at bottom center
+        section_y = config.MARGIN + 5
+        c.setFont(*config.CP_HP_FONT)
+
+        cp_label = "CP ______"
+        hp_label = "HP ______"
+
+        # Get total width of the two sections with a bit of spacing
+        spacing = 30
+        cp_width = c.stringWidth(cp_label, *config.CP_HP_FONT)
+        hp_width = c.stringWidth(hp_label, *config.CP_HP_FONT)
+        total_section_width = cp_width + spacing + hp_width
+
+        center_x = (width - total_section_width) / 2
+        c.drawString(center_x - 30, section_y + 20, cp_label)
+        c.drawString(center_x - 30 + cp_width + spacing, section_y + 20, hp_label)
+
     draw_header()
     num_items = 0
 
     for item in customer_data['items']:
-        c.setFont("Helvetica", 14)
+        c.setFont(*config.ITEM_FONT)
         title = item['title']
-        if ("hold" in title.lower() or "cancel" in title.lower()):
-            c.setFont("Helvetica-Bold", 14)
-        c.rect(margin, y_start - 1, 12, 12, stroke=1, fill=0)
-        c.drawString(margin + 20, y_start, title)
+        if ("hold" in title.lower() or "cancel" in title.lower() or "ups" in title.lower()):
+            c.setFont(*config.ITEM_IMPORTANT_FONT)
+        c.rect(config.MARGIN, y_start - 1, 12, 12, stroke=1, fill=0)
+        c.drawString(config.MARGIN + 20, y_start, title)
         num_items += 1
         y_start -= 7
-        c.line(margin, y_start, width - margin, y_start)
+        c.line(config.MARGIN, y_start, width - config.MARGIN, y_start)
         y_start -= 17
 
-        if y_start < margin + 60:
+        if y_start < config.MARGIN + 60:
             draw_footer()
             c.showPage()
             num_pages += 1
             num_items = 0
-            y_start = height - margin - 30
+            y_start = height - config.MARGIN - 30
             draw_header()
 
     draw_footer()

@@ -1,0 +1,14 @@
+MAX_ACCEPTABLE_TEMP = 85
+MIN_ACCEPTABLE_TEMP = 45
+
+# Doc Spacing
+MARGIN = 30
+
+# Fonts
+NO_FORCAST_DATA_FONT = ("Helvetica", 10)
+FORECAST_LABEL_FONT = ("Helvetica", 8)
+TEMP_LABEL_FONT = ("Helvetica", 10)
+EXTREME_TEMP_LABEL_FONT = ("Helvetica-Bold", 10)
+CP_HP_FONT = ("Helvetica", 10)
+ITEM_FONT = ("Helvetica", 14)
+ITEM_IMPORTANT_FONT = ("Helvetica-Bold", 14)

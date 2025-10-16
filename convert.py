@@ -3,7 +3,6 @@ from reportlab.lib.pagesizes import letter
 from generate_pick_sheet import generate_pick_sheet
 from numbered_canvas import NumberedCanvas
 from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range
-from weather import get_alerting_forecast
 import os
 import sys
 
@@ -16,6 +15,8 @@ def main():
 
     # Find Excel files (.xlsx and .xls) in current directory
     excel_files = list(current_dir.glob("*.xlsx")) + list(current_dir.glob("*.xls"))
+
+    pick_sheet_index = 1
 
     if len(excel_files) == 0 or len(excel_files) > 2:
         print("Error: only supports one or two files in directory.")
@@ -33,9 +34,9 @@ def main():
         c = NumberedCanvas(filename, pagesize=letter)
         groups = []
         for key in sorted_grouped_data:
-            groups.append(generate_pick_sheet(c, sorted_grouped_data[key]))
-            # print(sorted_grouped_data[key]['address'])
-            # print(get_alerting_forecast(sorted_grouped_data[key]['address']))
+            print(f"Generating pick sheet for {key} ..." + str(pick_sheet_index))
+            pick_sheet_index += 1
+            groups.append(generate_pick_sheet(c, sorted_grouped_data[key]))           
             c.showPage()
         c.set_groups(groups)
         c.save()
@@ -79,6 +80,8 @@ def main():
         c = NumberedCanvas(filename, pagesize=letter)
         groups = []
         for key in sorted_grouped_data:
+            print(f"Generating pick sheet for {key} ..." + str(pick_sheet_index))
+            pick_sheet_index += 1
             groups.append(generate_pick_sheet(c, sorted_grouped_data[key], boxed=True))
             c.showPage()
         c.set_groups(groups)
