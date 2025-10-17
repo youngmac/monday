@@ -1,10 +1,30 @@
 from pathlib import Path
 from reportlab.lib.pagesizes import letter
-from generate_pick_sheet import generate_pick_sheet
+from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary
 from numbered_canvas import NumberedCanvas
-from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range
+from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range, aggregate_data
 import os
 import sys
+
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, blocked=False, final_uid=0):
+    groups = []
+    single_item_orders = []
+    pick_sheet_index = 1
+
+    groups.append(generate_order_summary(c, aggregated_data, plants))
+
+    for key in sorted_grouped_data:
+        if len(sorted_grouped_data[key]["items"]) == 1 and sorted_grouped_data[key]["uid"] > final_uid:
+            single_item_orders.append(sorted_grouped_data[key])
+            continue
+
+        print(f"Generating pick sheet for {key} ..." + str(pick_sheet_index))
+        pick_sheet_index += 1
+        groups.append(generate_pick_sheet(c, sorted_grouped_data[key], blocked))           
+        c.showPage()
+
+    groups.append(generate_customer_summary(c, single_item_orders))
+    return groups
 
 def main():
     # Determine current directory based on execution context
@@ -15,8 +35,6 @@ def main():
 
     # Find Excel files (.xlsx and .xls) in current directory
     excel_files = list(current_dir.glob("*.xlsx")) + list(current_dir.glob("*.xls"))
-
-    pick_sheet_index = 1
 
     if len(excel_files) == 0 or len(excel_files) > 2:
         print("Error: only supports one or two files in directory.")
@@ -29,16 +47,12 @@ def main():
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
+        aggregated_data, plants = aggregate_data(sorted_grouped_data)
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
-        groups = []
-        for key in sorted_grouped_data:
-            print(f"Generating pick sheet for {key} ..." + str(pick_sheet_index))
-            pick_sheet_index += 1
-            groups.append(generate_pick_sheet(c, sorted_grouped_data[key]))           
-            c.showPage()
-        c.set_groups(groups)
+
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants))
         c.save()
 
     else:
@@ -74,17 +88,13 @@ def main():
                 i += 1
 
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
+        aggregated_data, plants = aggregate_data(sorted_grouped_data)
         formatted = max_date1.strftime("%A_%m-%d-%y")
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
-        groups = []
-        for key in sorted_grouped_data:
-            print(f"Generating pick sheet for {key} ..." + str(pick_sheet_index))
-            pick_sheet_index += 1
-            groups.append(generate_pick_sheet(c, sorted_grouped_data[key], boxed=True))
-            c.showPage()
-        c.set_groups(groups)
+
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, True, len(sorted_grouped_data0)))
         c.save()
 
     print(f"PDF created: {filename}")

@@ -1,6 +1,8 @@
 from datetime import datetime
 from openpyxl import load_workbook
 from pathlib import Path
+from collections import Counter
+from predicates import is_important, is_tc, is_plant, could_be_tc, could_be_plant, is_any_plant
 
 
 def excel_to_dicts(file_path: Path):
@@ -92,9 +94,7 @@ def get_date_range(grouped_data: dict) -> tuple[datetime | None, datetime | None
 
     return min_date, max_date
 
-def containts_important_word(title: str) -> bool:
-    important_words = ["hold", "cancel", "ups", "2-day", "2 day", "overnight", "express", "priority"]
-    return any(word in title.lower() for word in important_words)
+
 
 def sort_grouped_data(grouped_data):
     """
@@ -146,9 +146,52 @@ def sort_grouped_data(grouped_data):
         # Sort items: "hold" or "cancel" first, then by title
         value["items"].sort(
             key=lambda item: (
-                0 if (containts_important_word(item["title"])) else 1,
-                item["title"].lower()
-            )
-        )
+                0 if is_important(item["title"]) else
+                1 if is_tc(item["title"]) else
+                2 if could_be_tc(item["title"]) else
+                3 if is_plant(item["title"]) else
+                4 if could_be_plant(item["title"]) else
+                5, item["title"].lower()
+            ))
 
     return dict(data)
+
+# input data sorted according to sort_grouped_data function
+def aggregate_data(data):
+    aggregate = {}
+    plants = []
+    for key, order in data.items():
+        for item in order["items"]:
+            title = item["title"].lower()
+            if is_any_plant(title):
+                plants.append(title)
+                continue
+            elif title in aggregate:
+                aggregate[title] += 1
+            else:
+                aggregate[title] = 1
+
+
+    counts = Counter(plants)
+    dupl_plants = {plant: count for plant, count in counts.items() if count > 1}
+    plants = [plant for plant in plants if counts[plant] == 1]
+
+    for plant in dupl_plants:
+        aggregate[plant] = dupl_plants[plant]
+
+    sorted_data = dict(sorted(
+        aggregate.items(),
+        key=lambda item: (-item[1], item[0].lower())  # sort by count DESC, then name ASC
+    ))
+
+    sorted_plants = sorted(
+        plants,
+        key=lambda name: (
+            is_tc(name),    # sort tc first (True -> 1 -> -1 for descending)
+            is_plant(name),
+            name.lower()
+        )
+)
+
+    # TODO alphabetical
+    return sorted_data, sorted_plants
