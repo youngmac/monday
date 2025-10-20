@@ -55,14 +55,16 @@ def main():
         c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants))
         c.save()
 
-    else:
+    else: # get two latest files
         datas = []
         for file in excel_files:
             grouped_data = group_data(excel_to_dicts(file))
             _, max_date = get_date_range(grouped_data)
             datas.append({"grouped_data": grouped_data, "date": max_date})
+        # for d in datas:
+        #         print(d)
 
-        datas.sort(key=lambda item: list(item.values())[0]["date"], reverse=True)
+        datas.sort(key=lambda item: item["date"], reverse=True)
 
         # Two or more files processing (date 1 > date 0)
         grouped_data0 = datas[1]["grouped_data"]
@@ -70,7 +72,7 @@ def main():
         max_date0 = datas[1]["date"]
         max_date1 = datas[0]["date"]
 
-        if max_date0 > min(get_date_range(grouped_data1)):
+        if max_date0 >= min(get_date_range(grouped_data1)):
             print("Error: Date ranges of the two files overlap.")
             return
 
