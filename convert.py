@@ -36,8 +36,8 @@ def main():
     # Find Excel files (.xlsx and .xls) in current directory
     excel_files = list(current_dir.glob("*.xlsx")) + list(current_dir.glob("*.xls"))
 
-    if len(excel_files) == 0 or len(excel_files) > 2:
-        print("Error: only supports one or two files in directory.")
+    if len(excel_files) == 0:
+        print("Error: No excel file in current directory.")
         return
 
     if len(excel_files) == 1:
@@ -56,19 +56,19 @@ def main():
         c.save()
 
     else:
-        # Two files processing
-        data0 = excel_to_dicts(excel_files[0])
-        data1 = excel_to_dicts(excel_files[1])
-        grouped_data0 = group_data(data0)
-        grouped_data1 = group_data(data1)
-        _, max_date0 = get_date_range(grouped_data0)
-        _, max_date1 = get_date_range(grouped_data1)
+        datas = []
+        for file in excel_files:
+            grouped_data = group_data(excel_to_dicts(file))
+            _, max_date = get_date_range(grouped_data)
+            datas.append({"grouped_data": grouped_data, "date": max_date})
 
-        # Swap to ensure chronological order by max_date
-        if max_date0 > max_date1:
-            data0, data1 = data1, data0
-            grouped_data0, grouped_data1 = grouped_data1, grouped_data0
-            max_date0, max_date1 = max_date1, max_date0
+        datas.sort(key=lambda item: list(item.values())[0]["date"], reverse=True)
+
+        # Two or more files processing (date 1 > date 0)
+        grouped_data0 = datas[1]["grouped_data"]
+        grouped_data1 = datas[0]["grouped_data"]
+        max_date0 = datas[1]["date"]
+        max_date1 = datas[0]["date"]
 
         if max_date0 > min(get_date_range(grouped_data1)):
             print("Error: Date ranges of the two files overlap.")
