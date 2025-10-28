@@ -5,6 +5,8 @@ from reportlab.lib.units import inch
 from weather import get_alerting_forecast
 import config
 from predicates import is_important, is_plant, is_tc, could_be_plant, could_be_tc
+from reportlab.pdfbase import pdfmetrics
+
 
 # TODO get rid of magic number ;)
 
@@ -25,7 +27,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         - Shows all max temps if any day is > 88
         - Shows all min temps if any day is < 40
         """
-        if not forecast or "time" not in forecast:
+        if forecast == {} or "time" not in forecast:
             c.setFont(*config.NO_FORCAST_DATA_FONT)
             c.drawString(x, y, "No forecast data available. Please look up weather manually!")
             return
@@ -201,7 +203,8 @@ def generate_pick_sheet(c, customer_data, boxed=False):
 
     draw_footer()
     return num_pages
-def generate_order_summary(c, aggregated_data, plants):
+
+def generate_order_summary(c, aggregated_data, plants, date):
     """
     Draws an order summary on the provided canvas.
 

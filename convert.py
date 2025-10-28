@@ -6,12 +6,12 @@ from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_
 import os
 import sys
 
-def generate_pages(c, sorted_grouped_data, aggregated_data, plants, blocked=False, final_uid=0):
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date, blocked=False, final_uid=0):
     groups = []
     single_item_orders = []
     pick_sheet_index = 1
 
-    groups.append(generate_order_summary(c, aggregated_data, plants))
+    groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
 
     for key in sorted_grouped_data:
         if len(sorted_grouped_data[key]["items"]) == 1 and sorted_grouped_data[key]["uid"] > final_uid:
@@ -52,7 +52,7 @@ def main():
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
 
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date))
         c.save()
 
     else: # get two latest files
@@ -61,8 +61,6 @@ def main():
             grouped_data = group_data(excel_to_dicts(file))
             _, max_date = get_date_range(grouped_data)
             datas.append({"grouped_data": grouped_data, "date": max_date})
-        # for d in datas:
-        #         print(d)
 
         datas.sort(key=lambda item: item["date"], reverse=True)
 
@@ -96,7 +94,7 @@ def main():
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
 
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, True, len(sorted_grouped_data0)))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date1, True, len(sorted_grouped_data0)))
         c.save()
 
     print(f"PDF created: {filename}")

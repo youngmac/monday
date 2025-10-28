@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from geopy.geocoders import Nominatim
 from config import MAX_ACCEPTABLE_TEMP, MIN_ACCEPTABLE_TEMP
 import re
+import time
 
 MAPBOX_API_KEY = "pk.eyJ1IjoiZ29uZnJlZWNzcyIsImEiOiJjbWdweG1tMnEyZWtvMm5vazJtZW4yeTVrIn0.L8xXekK6sMvGCDnlfeAK7Q"
 BASE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
@@ -22,7 +23,13 @@ def get_coordinates(address):
         "limit": 1  # Only get the top result
     }
 
-    response = requests.get(url, params=params)
+    for i in range(0, 10):
+        try:
+            response = requests.get(url, params=params)
+            break  # success → exit loop
+        except:
+            print("Failed to extract weather. Wait 10 seconds")
+            time.sleep(10)
     data = response.json()
 
     # try generating coords with adddress
@@ -30,12 +37,15 @@ def get_coordinates(address):
         coords = data["features"][0]["geometry"]["coordinates"]
         return coords[1], coords[0]  # Return (lat, lon)
     else: # fallback to zip
-        zip = extract_zip(address)
-        geolocator = Nominatim(user_agent="weather_app")
-        location = geolocator.geocode(zip)
-        if location:
-            return location.latitude, location.longitude
-        raise Exception("Error fetching coordinates")
+        try:
+            zip = extract_zip(address)
+            geolocator = Nominatim(user_agent="weather_app")
+            location = geolocator.geocode(zip)
+            if location:
+                return location.latitude, location.longitude
+            raise Exception("Error fetching coordinates")
+        except:
+            return 0,0
 
 def get_forecast(lat, lon):
     """
@@ -55,7 +65,13 @@ def get_forecast(lat, lon):
         "end_date": str(end_date)
     }
 
-    response = requests.get(url, params=params)
+    for i in range(0, 10):
+        try:
+            response = requests.get(url, params=params)
+            break  # success → exit loop
+        except:
+            print("Failed to extract weather. Wait 10 seconds")
+            time.sleep(10)
     response.raise_for_status()
     return response.json()
 
@@ -76,6 +92,8 @@ def check_extreme_temps(forecast):
 
 def get_alerting_forecast(address):
     lat, lon = get_coordinates(address)
+    if lat == 0 and lon == 0:
+        return {}
     forecast = get_forecast(lat, lon)
     result = check_extreme_temps(forecast)
     return result
