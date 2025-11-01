@@ -10,6 +10,66 @@ from reportlab.pdfbase import pdfmetrics
 
 # TODO get rid of magic number ;)
 
+def draw_forecast_chart(c, forecast, x=50, y=100, width=500):
+    """
+    Draws a simple forecast chart with:
+    - First and last dates include full date (e.g., Mon, 10/13)
+    - Middle dates show only weekday (e.g., Tue)
+    - Shows all max temps if any day is > 88
+    - Shows all min temps if any day is < 40
+    """
+    if forecast is None:
+        return 1 # Nothing to draw
+    
+    if forecast == {} or "time" not in forecast:
+        c.setFont(*config.NO_FORCAST_DATA_FONT)
+        c.drawString(x, y, "No forecast data available. Please look up weather manually!")
+        return 2
+
+    dates = forecast["time"]
+    max_temps = forecast["temperature_2m_max"]
+    min_temps = forecast["temperature_2m_min"]
+
+    show_max = any(t > config.MAX_ACCEPTABLE_TEMP for t in max_temps)
+    show_min = any(t < config.MIN_ACCEPTABLE_TEMP for t in min_temps)
+
+    num_days = len(dates)
+    day_spacing = (width + 50) / num_days
+
+    c.setFont(*config.FORECAST_LABEL_FONT)
+
+    for i in range(num_days):
+        date_obj = datetime.strptime(dates[i], "%Y-%m-%d")
+
+        # Show full date on first and last day
+        if i == 0 or i == num_days - 1:
+            label = date_obj.strftime("%a, %m/%d")
+        else:
+            label = date_obj.strftime("%a")
+
+        x_pos = x + i * day_spacing
+
+        # Draw day label
+        c.drawString(x_pos, y + 15, label)
+
+        # Build temp string
+        temp_label = ""
+        if show_max:
+            temp_label += f"{int(max_temps[i])}°"
+        if show_min:
+            if temp_label:
+                temp_label += " / "
+            temp_label += f"{int(min_temps[i])}°"
+
+        # Draw temp label
+        if (int(max_temps[i]) > config.MAX_ACCEPTABLE_TEMP or int(min_temps[i]) < config.MIN_ACCEPTABLE_TEMP):
+            c.setFont(*config.EXTREME_TEMP_LABEL_FONT)
+        else:
+            c.setFont(*config.TEMP_LABEL_FONT)
+        c.drawString(x_pos, y, temp_label)
+        c.setFont(*config.FORECAST_LABEL_FONT)
+    return 0
+
 def generate_pick_sheet(c, customer_data, boxed=False):
     """
     Generate a pick sheet PDF page(s) for a customer.
@@ -18,65 +78,6 @@ def generate_pick_sheet(c, customer_data, boxed=False):
     num_pages = 1
     width, height = letter
     y_start = height - config.MARGIN - 30
-
-    def draw_forecast_chart(forecast, x=50, y=100, width=500):
-        """
-        Draws a simple forecast chart with:
-        - First and last dates include full date (e.g., Mon, 10/13)
-        - Middle dates show only weekday (e.g., Tue)
-        - Shows all max temps if any day is > 88
-        - Shows all min temps if any day is < 40
-        """
-        if forecast == {} or "time" not in forecast:
-            c.setFont(*config.NO_FORCAST_DATA_FONT)
-            c.drawString(x, y, "No forecast data available. Please look up weather manually!")
-            return
-
-        dates = forecast["time"]
-        max_temps = forecast["temperature_2m_max"]
-        min_temps = forecast["temperature_2m_min"]
-
-        show_max = any(t > config.MAX_ACCEPTABLE_TEMP for t in max_temps)
-        show_min = any(t < config.MIN_ACCEPTABLE_TEMP for t in min_temps)
-
-        if not (show_max or show_min):
-            return  # Nothing to draw
-
-        num_days = len(dates)
-        day_spacing = (width + 50) / num_days
-
-        c.setFont(*config.FORECAST_LABEL_FONT)
-
-        for i in range(num_days):
-            date_obj = datetime.strptime(dates[i], "%Y-%m-%d")
-
-            # Show full date on first and last day
-            if i == 0 or i == num_days - 1:
-                label = date_obj.strftime("%a, %m/%d")
-            else:
-                label = date_obj.strftime("%a")
-
-            x_pos = x + i * day_spacing
-
-            # Draw day label
-            c.drawString(x_pos, y + 15, label)
-
-            # Build temp string
-            temp_label = ""
-            if show_max:
-                temp_label += f"{int(max_temps[i])}°"
-            if show_min:
-                if temp_label:
-                    temp_label += " / "
-                temp_label += f"{int(min_temps[i])}°"
-
-            # Draw temp label
-            if (int(max_temps[i]) > config.MAX_ACCEPTABLE_TEMP or int(min_temps[i]) < config.MIN_ACCEPTABLE_TEMP):
-                c.setFont(*config.EXTREME_TEMP_LABEL_FONT)
-            else:
-                c.setFont(*config.TEMP_LABEL_FONT)
-            c.drawString(x_pos, y, temp_label)
-            c.setFont(*config.FORECAST_LABEL_FONT)
 
     def draw_header():
         nonlocal y_start
@@ -133,7 +134,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         forecast = get_alerting_forecast(customer_data['address'])
         if forecast or forecast == {}:
             y_start -= 50
-            draw_forecast_chart(forecast, x=config.MARGIN, y=y_start)
+            draw_forecast_chart(c, forecast, x=config.MARGIN, y=y_start)
             y_start += 20
 
         y_start -= 30
@@ -146,8 +147,11 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         # Total number items/number items on this page
         nonlocal num_items
         c.setFont("Helvetica-Bold", 40)
+        items_total = 0
+        for item in customer_data['items']:
+            items_total += item.get('quantity', 1)
 
-        total = str(customer_data.get('num_items', len(customer_data['items'])))
+        total = str(customer_data.get('num_items', items_total))
         total_items_width = c.stringWidth(total, "Helvetica-Bold", 40)
         x, y = config.MARGIN, config.MARGIN + 20
         c.drawString(x, y, total)
@@ -182,17 +186,43 @@ def generate_pick_sheet(c, customer_data, boxed=False):
     num_items = 0
 
     for item in customer_data['items']:
+        # Default font for regular items
         c.setFont(*config.ITEM_FONT)
+
         title = item['title']
-        if (is_important(title)):
+        qty = item.get('quantity', 1)
+
+        # If the item title is important, use the special font
+        if is_important(title):
             c.setFont(*config.ITEM_IMPORTANT_FONT)
+
+        # Draw checkbox rectangle
         c.rect(config.MARGIN, y_start - 1, 12, 12, stroke=1, fill=0)
-        c.drawString(config.MARGIN + 20, y_start, title)
-        num_items += 1
+
+        # --- Format and Draw Quantity ---
+        qty_str = f"{qty}" if qty > 1 else ""
+        # Use bold font for quantity (regardless of importance)
+        c.setFont(*config.ITEM_IMPORTANT_FONT)
+        qty_x = config.MARGIN + 20
+        c.drawString(qty_x, y_start, f"{qty_str:>3}")  # right-align within small space
+
+        # --- Draw Title ---
+        title_x = config.MARGIN + 55  # fixed offset so all titles align
+        # Reset font (important or normal)
+        if is_important(title):
+            c.setFont(*config.ITEM_IMPORTANT_FONT)
+        else:
+            c.setFont(*config.ITEM_FONT)
+
+        c.drawString(title_x, y_start, title)
+
+        # --- Draw Line Separator ---
+        num_items += qty
         y_start -= 7
         c.line(config.MARGIN, y_start, width - config.MARGIN, y_start)
         y_start -= 17
 
+        # --- Handle Pagination ---
         if y_start < config.MARGIN + 60:
             draw_footer()
             c.showPage()
@@ -225,7 +255,7 @@ def generate_order_summary(c, aggregated_data, plants, date):
 
     # Title
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(margin, y, "Order Summary")
+    c.drawString(margin, y, "Order Summary" + date.strftime(" for %A, %B %d, %Y"))
     y -= 2 * line_height
 
     # Header for regular items
@@ -242,7 +272,7 @@ def generate_order_summary(c, aggregated_data, plants, date):
             page_count += 1
             y = start_y
             c.setFont("Helvetica-Bold", 18)
-            c.drawString(margin, y, "Order Summary (cont'd)")
+            c.drawString(margin, y, "Order Summary (cont'd)" + date.strftime(" for %A, %B %d, %Y"))
             y -= 2 * line_height
             c.setFont("Helvetica-Bold", 12)
             c.drawString(margin, y, "Item")
@@ -271,7 +301,7 @@ def generate_order_summary(c, aggregated_data, plants, date):
         y = start_y
 
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(margin, y, "Plant List")
+    c.drawString(margin, y, "Plant List" + date.strftime(" for %A, %B %d, %Y"))
     y -= 2 * line_height
     c.setFont("Helvetica", 10)
 
@@ -281,7 +311,7 @@ def generate_order_summary(c, aggregated_data, plants, date):
             page_count += 1
             y = start_y
             c.setFont("Helvetica-Bold", 14)
-            c.drawString(margin, y, "Plant List (cont'd)")
+            c.drawString(margin, y, "Plant List (cont'd)" + date.strftime(" for %A, %B %d, %Y"))
             y -= 2 * line_height
             c.setFont("Helvetica", 10)
 
@@ -302,7 +332,7 @@ def generate_order_summary(c, aggregated_data, plants, date):
     return page_count
 
 
-def generate_customer_summary(c, customers):
+def generate_customer_summary(c, customers, date):
     width, height = letter
     margin = 50
     line_height = 16
@@ -313,33 +343,37 @@ def generate_customer_summary(c, customers):
     user_x = margin
     item_x = width - margin
 
-    def new_page(title="Single Item Orders"):
+    def new_page(date, title="Single Item Orders"):
         nonlocal y, page_count
         c.showPage()
         page_count += 1
         y = start_y
         c.setFont("Helvetica-Bold", 16)
-        c.drawString(user_x, y, title)
+        c.drawString(user_x, y, title + date.strftime(" for %A, %B %d, %Y"))
         y -= 2 * line_height
         c.setFont("Helvetica", 10)
 
     # Title
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(user_x, y, "Single Item Orders")
+    c.drawString(user_x, y, "Single Item Orders" + date.strftime(" for %A, %B %d, %Y"))
     y -= 2 * line_height
     c.setFont("Helvetica", 10)
 
-    # Build list of (username, item_title)
+    # Build list of (username, item_title, forecast)
     entries = []
+    cust_index = 1
     for cust in customers:
         username = cust['username']
         for item in cust['items']:
             title = item['title']
-            entries.append((username, title))
+            print(f"Getting weather for single item order {username} ... {cust_index}/{len(customers)}")
+            cust_index += 1
+            forecast = get_alerting_forecast(cust['address'])
+            entries.append((username, title, forecast))
 
     # Sort with custom logic
     def sort_key(entry):
-        _, title = entry
+        _, title, _ = entry
         return (
             not is_tc(title),             # False (is_tc) comes first
             not could_be_tc(title),       # then could_be_tc
@@ -350,16 +384,31 @@ def generate_customer_summary(c, customers):
 
     entries.sort(key=sort_key)
 
-    for username, item_title in entries:
-        if y < margin + line_height:
-            new_page("Single Item Orders (cont'd)")
+    for username, item_title, forecast in entries:
+        if y - 50 < margin + line_height:
+            new_page(date, "Single Item Orders ")
+        y -= line_height - 10
         c.drawString(user_x, y, username)
         c.drawRightString(item_x, y, item_title)
         y -= line_height
 
+        # Always attempt to draw if we got *any* forecast result
+        y -= 20
+        result = draw_forecast_chart(c, forecast or {}, x=config.MARGIN, y=y)
+
+        if result == 1:
+            y += 10
+        elif result == 2:
+            y += 0  # optional spacing tweak
+        c.setFont("Helvetica", 10)
+        c.setStrokeColor(colors.black)
+        y -= 5
+        c.line(config.MARGIN, y, width - config.MARGIN, y)
+        y -= 10
+
     # Total
     if y < margin + 2 * line_height:
-        new_page("Single Item Orders (cont'd)")
+        new_page(date, "Single Item Orders (cont'd) ")
     y -= line_height
     c.setFont("Helvetica-Bold", 11)
     c.drawString(user_x, y, f"Total orders: {len(customers)}")

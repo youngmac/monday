@@ -40,6 +40,7 @@ def name_address_to_key(row: dict) -> str:
 def group_data(data: list[dict]) -> dict:
     """
     Groups rows by recipient's name and address.
+    Combines items with the same title by summing quantity.
     Assumes prices are in USD and ignores variants/SKUs.
     """
     grouped_data = {}
@@ -47,12 +48,10 @@ def group_data(data: list[dict]) -> dict:
     for row in data:
         key = name_address_to_key(row)
 
-        item = {
-            "title": (row.get("Item Title") or ""),
-            "price": (row.get("Item Price") or 0),
-            "quantity": (row.get("Quantity") or 0),
-            "time": (row.get("Order Date(PDT)") or ""),
-        }
+        title = (row.get("Item Title") or "")
+        price = float(row.get("Item Price") or 0)
+        quantity = int(row.get("Quantity") or 0)
+        time = (row.get("Order Date(PDT)") or "")
 
         if key not in grouped_data:
             street_2 = (row.get("Street Line 2") or "")
@@ -68,10 +67,26 @@ def group_data(data: list[dict]) -> dict:
                 "name": (row.get("Recipient Name") or ""),
                 "username": (row.get("Palmstreet UserName") or ""),
                 "address": address,
-                "items": [item],
+                "items": {},
             }
+
+        # --- Group items by title ---
+        items = grouped_data[key]["items"]
+        if title in items:
+            items[title]["quantity"] += quantity
+            if time > items[title]["time"]:
+                items[title]["time"] = time
         else:
-            grouped_data[key]["items"].append(item)
+            items[title] = {
+                "title": title,
+                "price": price,
+                "quantity": quantity,
+                "time": time,
+            }
+
+    # ✅ Convert all items dicts back to lists (AFTER the loop)
+    for key in grouped_data:
+        grouped_data[key]["items"] = list(grouped_data[key]["items"].values())
 
     return grouped_data
 
@@ -167,9 +182,9 @@ def aggregate_data(data):
                 plants.append(title)
                 continue
             elif title in aggregate:
-                aggregate[title] += 1
+                aggregate[title] += item["quantity"]
             else:
-                aggregate[title] = 1
+                aggregate[title] = item["quantity"]
 
 
     counts = Counter(plants)
@@ -188,7 +203,9 @@ def aggregate_data(data):
         plants,
         key=lambda name: (
             is_tc(name),    # sort tc first (True -> 1 -> -1 for descending)
+            could_be_tc(name),
             is_plant(name),
+            could_be_plant(name),
             name.lower()
         )
 )

@@ -13,17 +13,22 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date, bl
 
     groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
 
+    num_singles = 0
+    for key in sorted_grouped_data:
+        if len(sorted_grouped_data[key]["items"]) == 1:
+            num_singles += 1
+
     for key in sorted_grouped_data:
         if len(sorted_grouped_data[key]["items"]) == 1 and sorted_grouped_data[key]["uid"] > final_uid:
             single_item_orders.append(sorted_grouped_data[key])
             continue
 
-        print(f"Generating pick sheet for {key} ..." + str(pick_sheet_index))
+        print(f"Generating pick sheet (weather) for {key} ..." + str(pick_sheet_index) + "/" + str(len(sorted_grouped_data) - num_singles))
         pick_sheet_index += 1
         groups.append(generate_pick_sheet(c, sorted_grouped_data[key], blocked))           
         c.showPage()
 
-    groups.append(generate_customer_summary(c, single_item_orders))
+    groups.append(generate_customer_summary(c, single_item_orders, max_date))
     return groups
 
 def main():

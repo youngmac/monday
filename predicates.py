@@ -15,19 +15,20 @@ def is_gear(title):
     title = title.lower()
     return (
         "100g" in title
-        and "500 ml" in title
-        and "500ml" in title
-        and "1000 ml" in title
-        and"1000ml" in title
+        or "500 ml" in title
+        or "500ml" in title
+        or "1000 ml" in title
+        or"1000ml" in title
     )
 
 def is_tc(title):
     title = title.lower()
     return (
-        bool(re.search(r'\d{3,4}', title))
+        ((bool(re.search(r'\d{3,4}', title))
         and " tc" in title
         and not is_gear(title)
-        and title != "basic tc acclimation kit"
+        and title != "basic tc acclimation kit"))
+        or (bool(re.search(r'\d{3,4}', title)) and ("5 pack" in title or "10 pack" in title))
     )
 
 def is_plant(title):
