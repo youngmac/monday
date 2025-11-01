@@ -415,3 +415,52 @@ def generate_customer_summary(c, customers, date):
 
     c.showPage()
     return page_count
+
+def generate_holds_report(c, holds, max_date):
+    """
+    Generate a PDF report of holds using ReportLab.
+    Returns the number of pages created.
+    """
+    width, height = letter
+
+    # Title with max_date
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, height - 50, f"Hold Orders Report (Up to {max_date.strftime('%Y-%m-%d')})")
+
+    # Column headers
+    c.setFont("Helvetica-Bold", 12)
+    y = height - 80
+    c.drawString(50, y, "Customer")
+    c.drawString(225, y, "Hold Date")
+    c.drawString(300, y, "Text")
+    y -= 20
+
+    # Draw a line under headers
+    c.line(50, y + 15, width - 50, y + 15)
+
+    # Initialize page counter
+    page_count = 1
+    c.setFont("Helvetica", 10)
+
+    for key in holds:
+        customer = holds[key]['name']
+
+        hold_date_str = holds[key]['date'].strftime("%Y-%m-%d")
+        text = holds[key]['text']
+
+        # Draw customer, date, text
+        c.drawString(50, y, customer)
+        c.drawString(225, y, hold_date_str)
+        c.drawString(300, y, text)
+        y -= 15
+
+        # Start new page if necessary
+        if y < 50:
+            c.showPage()
+            page_count += 1
+            y = height - 50
+            c.setFont("Helvetica", 10)
+
+    # Save PDF
+    c.showPage()
+    return page_count

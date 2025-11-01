@@ -1,12 +1,12 @@
 from pathlib import Path
 from reportlab.lib.pagesizes import letter
-from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary
+from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary, generate_holds_report
 from numbered_canvas import NumberedCanvas
 from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range, aggregate_data
 import os
 import sys
 
-def generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date, blocked=False, final_uid=0):
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, blocked=False, final_uid=0):
     groups = []
     single_item_orders = []
     pick_sheet_index = 1
@@ -14,11 +14,15 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date, bl
     groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
 
     num_singles = 0
+    
     for key in sorted_grouped_data:
         if len(sorted_grouped_data[key]["items"]) == 1:
             num_singles += 1
 
     for key in sorted_grouped_data:
+        if key in holds:
+            continue  # skip orders with holds
+
         if len(sorted_grouped_data[key]["items"]) == 1 and sorted_grouped_data[key]["uid"] > final_uid:
             single_item_orders.append(sorted_grouped_data[key])
             continue
@@ -29,6 +33,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date, bl
         c.showPage()
 
     groups.append(generate_customer_summary(c, single_item_orders, max_date))
+    groups.append(generate_holds_report(c, holds, max_date))
     return groups
 
 def main():
@@ -52,12 +57,12 @@ def main():
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
-        aggregated_data, plants = aggregate_data(sorted_grouped_data)
+        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data)
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
 
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date))
         c.save()
 
     else: # get two latest files
@@ -93,13 +98,13 @@ def main():
                 i += 1
 
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
-        aggregated_data, plants = aggregate_data(sorted_grouped_data)
+        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data)
         formatted = max_date1.strftime("%A_%m-%d-%y")
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
 
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, max_date1, True, len(sorted_grouped_data0)))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date1, True, len(sorted_grouped_data0)))
         c.save()
 
     print(f"PDF created: {filename}")

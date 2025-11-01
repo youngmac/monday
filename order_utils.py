@@ -2,7 +2,7 @@ from datetime import datetime
 from openpyxl import load_workbook
 from pathlib import Path
 from collections import Counter
-from predicates import is_important, is_tc, is_plant, could_be_tc, could_be_plant, is_any_plant
+from predicates import is_important, is_tc, is_plant, could_be_tc, could_be_plant, is_any_plant, is_future_hold
 
 
 def excel_to_dicts(file_path: Path):
@@ -175,9 +175,13 @@ def sort_grouped_data(grouped_data):
 def aggregate_data(data):
     aggregate = {}
     plants = []
+    holds = {}
     for key, order in data.items():
         for item in order["items"]:
             title = item["title"].lower()
+            potential_hold, hold_text = is_future_hold(title, item["time"])
+            if potential_hold != None:
+                holds[key] = {"date": potential_hold, "text": hold_text, "name": order["username"], "address": order["address"]}
             if is_any_plant(title):
                 plants.append(title)
                 continue
@@ -208,7 +212,6 @@ def aggregate_data(data):
             could_be_plant(name),
             name.lower()
         )
-)
+    )
 
-    # TODO alphabetical
-    return sorted_data, sorted_plants
+    return sorted_data, sorted_plants, holds
