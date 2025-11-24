@@ -6,6 +6,7 @@ from weather import get_alerting_forecast
 import config
 from predicates import is_important, is_plant, is_tc, could_be_plant, could_be_tc
 from reportlab.pdfbase import pdfmetrics
+from datetime import date
 
 
 # TODO get rid of magic number ;)
@@ -369,11 +370,11 @@ def generate_customer_summary(c, customers, date):
             print(f"Getting weather for single item order {username} ... {cust_index}/{len(customers)}")
             cust_index += 1
             forecast = get_alerting_forecast(cust['address'])
-            entries.append((username, title, forecast))
+            entries.append((username, cust["state"], title, forecast))
 
     # Sort with custom logic
     def sort_key(entry):
-        _, title, _ = entry
+        _, _, title, _ = entry
         return (
             not is_tc(title),             # False (is_tc) comes first
             not could_be_tc(title),       # then could_be_tc
@@ -384,11 +385,11 @@ def generate_customer_summary(c, customers, date):
 
     entries.sort(key=sort_key)
 
-    for username, item_title, forecast in entries:
+    for username, state, item_title, forecast in entries:
         if y - 50 < margin + line_height:
             new_page(date, "Single Item Orders ")
         y -= line_height - 10
-        c.drawString(user_x, y, username)
+        c.drawString(user_x, y, username + ", " + state)
         c.drawRightString(item_x, y, item_title)
         y -= line_height
 
@@ -416,7 +417,7 @@ def generate_customer_summary(c, customers, date):
     c.showPage()
     return page_count
 
-def generate_holds_report(c, holds, max_date):
+def generate_holds_report(c, holds):
     """
     Generate a PDF report of holds using ReportLab.
     Returns the number of pages created.
@@ -425,7 +426,7 @@ def generate_holds_report(c, holds, max_date):
 
     # Title with max_date
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, height - 50, f"Hold Orders Report (Up to {max_date.strftime('%Y-%m-%d')})")
+    c.drawString(50, height - 50, f"Hold Orders Report (Up to {date.today().strftime('%Y-%m-%d')})")
 
     # Column headers
     c.setFont("Helvetica-Bold", 12)

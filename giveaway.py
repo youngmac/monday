@@ -22,22 +22,51 @@ def main():
     grouped_data = group_data(data)
     sorted_grouped_data = sort_grouped_data(grouped_data)
 
-    target_date = date(2025, 10, 26)
+    # target_date = date(2025, 10, 26)
+    # entries = []
+    # for key in sorted_grouped_data:
+    #     bought_sunday = False
+    #     num_items_sunday = 0
+    #     for item in sorted_grouped_data[key]["items"]:
+    #         dt = datetime.strptime(str(item['time']), "%Y-%m-%d %H:%M:%S")
+    #         if dt.date() == target_date:
+    #             num_items_sunday += 1
+    #         if "add on" not in item["title"]:
+    #             bought_sunday = True
+    #     if bought_sunday:
+    #         for i in range(0, num_items_sunday):
+    #             entries.append(sorted_grouped_data[key]["username"])
+    # for entry in entries:
+    #     print(entry)
+    target_date = date(2025, 11, 22)
     entries = []
+    non_entries = []
     for key in sorted_grouped_data:
-        bought_sunday = False
-        num_items_sunday = 0
         for item in sorted_grouped_data[key]["items"]:
             dt = datetime.strptime(str(item['time']), "%Y-%m-%d %H:%M:%S")
-            if dt.date() == target_date:
-                num_items_sunday += 1
-            if "add on" not in item["title"]:
-                bought_sunday = True
-        if bought_sunday:
-            for i in range(0, num_items_sunday):
-                entries.append(sorted_grouped_data[key]["username"])
+            if dt.date() == target_date \
+                and "hold" not in item["title"].lower() \
+                and "heat pack" not in item["title"].lower() \
+                and item["price"] > .99:
+                entries.append("@" + str(sorted_grouped_data[key]["username"]))
+            # elif dt.date() == target_date:
+                # non_entries.append(sorted_grouped_data[key]["username"] + " - " + item["title"])
+    # for entry in non_entries:
+    #     print(entry)
+    # print("Non-entries:" + str(len(non_entries)))
+    # print ("-----")
     for entry in entries:
         print(entry)
+    print("Total entries: " + str(len(entries)))
+    # print("@@@")
+    # total = 0
+    # for key in sorted_grouped_data:
+    #     for item in sorted_grouped_data[key]["items"]:
+    #         dt = datetime.strptime(str(item['time']), "%Y-%m-%d %H:%M:%S")
+    #         if (dt.date() == target_date):
+    #             total += 1
+    # print("Total items on target date: " + str(total))
+    # print(len(sorted_grouped_data))
 
 if __name__ == "__main__":
     main()

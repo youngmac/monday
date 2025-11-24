@@ -10,9 +10,12 @@ import calendar
 
 
 def is_important(title):
+    title = title.lower()
+    if "heat" in title and "pack" in title:
+        return True
     important_words = ["hold", "cancel", "ups", "next", "2-day", "2 day"
                        , "overnight", "express", "priority", "hook me up"
-                       , "heat", "insulation", "cryo", "mystery"]
+                       , "insulation", "cryo", "mystery"]
     return any(word in title.lower() for word in important_words)
 
 def is_gear(title):
@@ -49,82 +52,67 @@ def could_be_tc(title):
 
 def could_be_plant(title):
     title = title.lower()
-    return "in 2” pot" in title and not is_gear(title)
+    return ("in 2”" in title and not is_gear(title)) or ("monstera" in title and "pot" not in title)
 
 def is_any_plant(title):
     title = title.lower()
     return is_tc(title) or is_plant(title) or could_be_tc(title) or could_be_plant(title)
 
 def is_future_hold(text_in: str, purchase_date):
-    """
-    Extract a 'hold until' date from text relative to a purchase date.
-
-    Returns a datetime.date if a valid hold date is found that is at least:
-      - 2 days in the future if current time < 4pm
-      - 1 day in the future if current time >= 4pm
-    Otherwise returns None.
-    """
-    # --- Normalize purchase_date ---
-    if isinstance(purchase_date, str):
-        try:
-            purchase_date = parser.parse(purchase_date).date()
-        except Exception:
-            return None, None
-    elif isinstance(purchase_date, datetime):
-        purchase_date = purchase_date.date()
-    elif not isinstance(purchase_date, date):
-        return None, None # invalid input type
-
-    text = text_in.lower().strip()
     now = datetime.now()
-    if "hold" not in text:
+    today = now.date()
+    def can_hold(hold_date):
+        weekday = now.weekday()  # Monday = 0, Sunday = 6
+
+        # Determine the "comparison date" based on time and weekday
+        if weekday < 5:  # Monday–Friday
+            if now.hour < 17:  # Before 5 PM
+                comparison_date = today
+            else:  # After 5 PM
+                comparison_date = today + timedelta(days=1)
+        else:  # Weekend (Saturday or Sunday)
+            # Days until next Monday
+            days_until_monday = (7 - weekday)
+            comparison_date = today + timedelta(days=days_until_monday)
+        print(f"Comparison date: {comparison_date}, Hold date: {hold_date}")
+        print(type(hold_date), type(comparison_date))
+        return comparison_date < hold_date
+
+
+    text = text_in.lower()
+
+    # hardcoded case
+    dates = re.findall(r'\b\d{1,2}[-/]\d{1,2}\b', text)
+    converted_dates = []
+
+    for d in dates:
+        # Normalize separator to "/"
+        d_clean = d.replace('-', '/')
+        month, day = map(int, d_clean.split("/"))
+
+        year = today.year
+        candidate = date(year, month, day)
+
+        # Only roll forward for December → January cases
+        if (
+            today.month == 12 and    # we're in December
+            month == 1 and           # parsed month is January
+            candidate < today        # this year's Jan date has passed
+        ):
+            candidate = date(year + 1, month, day)
+
+        converted_dates.append(candidate)
+
+    print(f"Text: {text}")
+    print(f"Converted dates: {converted_dates}")
+    for d in converted_dates:
+        print(f"Checking can_hold({d}) = {can_hold(d)}")
+
+    if "hold" in text and converted_dates and can_hold(converted_dates[0]):
+        print("Returning:", converted_dates[0], text_in)
+        return converted_dates[0], text_in
+    else:
+        print("No match, returning None, None")
         return None, None
 
-    # Determine what counts as "future"
-    if now.hour < 16:  # before 4pm
-        future_threshold = now.date() + timedelta(days=2)
-    else:               # after 4pm
-        future_threshold = now.date() + timedelta(days=1)
-
-    # Patterns for explicit dates
-    date_patterns = [
-        r'(\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)',    # e.g. 9/29, 9-29-24, 11/3
-        r'(\b\d{1,2}(?:st|nd|rd|th)?\s*[a-z]{3,9})',  # e.g. 18th feb, 5th september
-    ]
-
-    # --- Try explicit date formats first ---
-    for pattern in date_patterns:
-        match = re.search(pattern, text)
-        if match:
-            date_str = match.group(1)
-            try:
-                parsed = parser.parse(
-                    date_str,
-                    fuzzy=True,
-                    default=datetime.combine(purchase_date, datetime.min.time())
-                )
-                hold_date = parsed.date()
-
-                if hold_date >= future_threshold:
-                    return hold_date, text_in
-            except Exception:
-                continue  # try next pattern
-
-    # --- Try weekday names (full and abbreviated) ---
-    weekdays = {day.lower(): i for i, day in enumerate(calendar.day_name)}
-    weekdays.update({day[:3].lower(): i for i, day in enumerate(calendar.day_name)})
-
-    found_day = next((w for w in weekdays if w in text), None)
-    if found_day:
-        target_wd = weekdays[found_day]
-        days_ahead = (target_wd - purchase_date.weekday() + 7) % 7
-        if days_ahead == 0:
-            days_ahead = 7  # same weekday → next week
-        hold_date = purchase_date + timedelta(days=days_ahead)
-
-        if hold_date >= future_threshold:
-            return hold_date, text_in
-
-    # Nothing valid found
-    return None, None
     

@@ -14,7 +14,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
     groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
 
     num_singles = 0
-    
+
     for key in sorted_grouped_data:
         if len(sorted_grouped_data[key]["items"]) == 1:
             num_singles += 1
@@ -33,7 +33,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
         c.showPage()
 
     groups.append(generate_customer_summary(c, single_item_orders, max_date))
-    groups.append(generate_holds_report(c, holds, max_date))
+    groups.append(generate_holds_report(c, holds))
     return groups
 
 def main():

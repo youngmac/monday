@@ -48,6 +48,10 @@ def group_data(data: list[dict]) -> dict:
     for row in data:
         key = name_address_to_key(row)
 
+        # # Ignore cancelled orders
+        # if (row.get("Order Status") != "Ready to Ship"):
+        #     continue
+
         title = (row.get("Item Title") or "")
         price = float(row.get("Item Price") or 0)
         quantity = int(row.get("Quantity") or 0)
@@ -67,6 +71,7 @@ def group_data(data: list[dict]) -> dict:
                 "name": (row.get("Recipient Name") or ""),
                 "username": (row.get("Palmstreet UserName") or ""),
                 "address": address,
+                "state": (row.get("State") or ""),
                 "items": {},
             }
 
