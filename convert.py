@@ -6,43 +6,60 @@ from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_
 import os
 import sys
 import tkinter as tk
-from tkinter import ttk, messagebox
-from pathlib import Path
-import sys, os
+from tkinter import ttk, messagebox, filedialog
 
-def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, blocked=False, final_uid=0):
+# ===================================================================
+#                           PROCESSING FUNCTIONS
+# ===================================================================
+
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, blocked=False, final_uid=0, progress_callback=None, cancel_event=None):
     groups = []
     single_item_orders = []
     pick_sheet_index = 1
 
+    # Include all orders in total for progress calculation
+    total_orders = len(sorted_grouped_data)
+    total_orders = max(total_orders, 1)  # avoid division by zero
+
     groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
 
-    num_singles = 0
-
     for key in sorted_grouped_data:
-        if len(sorted_grouped_data[key]["items"]) == 1:
-            num_singles += 1
+        if cancel_event and cancel_event.is_set():
+            print("PDF generation cancelled.")
+            return groups
 
-    for key in sorted_grouped_data:
+        if progress_callback:
+            progress_callback((pick_sheet_index / total_orders) * 100, key)
+
+        order = sorted_grouped_data[key]
+
         if key in holds:
-            continue  # skip orders with holds
-
-        if len(sorted_grouped_data[key]["items"]) == 1 and sorted_grouped_data[key]["uid"] > final_uid:
-            single_item_orders.append(sorted_grouped_data[key])
+            # Still count toward progress but skip actual page generation
+            pick_sheet_index += 1
             continue
 
-        print(f"Generating pick sheet (weather) for {key} ..." + str(pick_sheet_index) + "/" + str(len(sorted_grouped_data) - num_singles))
-        pick_sheet_index += 1
-        groups.append(generate_pick_sheet(c, sorted_grouped_data[key], blocked))           
-        c.showPage()
+        if len(order["items"]) == 1 and order["uid"] > final_uid:
+            single_item_orders.append(order)
+            pick_sheet_index += 1
+            continue
 
+        print(f"Generating pick sheet for {key} ({pick_sheet_index}/{total_orders})")
+        groups.append(generate_pick_sheet(c, order, blocked))
+        c.showPage()
+        pick_sheet_index += 1
+
+    # Add single-item orders and holds reports
     groups.append(generate_customer_summary(c, single_item_orders, max_date))
     groups.append(generate_holds_report(c, holds))
+
+    # Final callback at 100%
+    if progress_callback:
+        progress_callback(100, "Done")
+
     return groups
 
-def run_processing(file1, file2=None):
+def run_processing(file1, file2=None, progress_callback=None):
     """Runs your existing logic. file2 may be None."""
-    # Convert to Path objects
     file1 = Path(file1)
     file2 = Path(file2) if file2 else None
 
@@ -57,7 +74,7 @@ def run_processing(file1, file2=None):
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, progress_callback=progress_callback))
         c.save()
 
     else:
@@ -81,7 +98,6 @@ def run_processing(file1, file2=None):
         sorted_grouped_data0 = sort_grouped_data(grouped_data0)
         sorted_grouped_data1 = sort_grouped_data(grouped_data1)
 
-        # Assign UIDs and merge counts
         i = 1
         for key in sorted_grouped_data1:
             if key in sorted_grouped_data0:
@@ -98,21 +114,17 @@ def run_processing(file1, file2=None):
         filename = f"{formatted}.pdf"
 
         c = NumberedCanvas(filename, pagesize=letter)
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date1, True, len(sorted_grouped_data0)))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date1, True, len(sorted_grouped_data0), progress_callback=progress_callback))
         c.save()
 
     os.system(f'open "{filename}"')
     return filename
-
 
 # ===================================================================
 #                           TKINTER UI
 # ===================================================================
 
 def run_gui():
-    from tkinter import filedialog
-
-    # Determine working directory (your existing logic)
     if getattr(sys, 'frozen', False):
         current_dir = Path(sys.executable).parent
     else:
@@ -120,33 +132,29 @@ def run_gui():
 
     root = tk.Tk()
     root.title("Excel PDF Generator")
-    root.geometry("650x300")
+    root.geometry("650x400")
 
     selected_file1 = tk.StringVar()
     selected_file2 = tk.StringVar()
 
-    # ---------------------------------------------------
-    # Upload button #1 (REQUIRED)
-    # ---------------------------------------------------
+    # Upload file #1
     def upload_file1():
         file_path = filedialog.askopenfilename(
             title="Select Excel File",
-            initialdir=str(current_dir),                     # macOS Finder starts here
+            initialdir=str(current_dir),
             filetypes=[("Excel Files", "*.xls *.xlsx")]
         )
         if file_path:
             selected_file1.set(file_path)
             file1_label.config(text=f"File 1 Selected: {file_path}")
 
-    upload1_btn = tk.Button(root, text="Select First (Use Ready to ship from mobile device's \"send email\")", command=upload_file1)
-    upload1_btn.pack(pady=10)
+    upload1_btn = tk.Button(root, text="Select First Excel File", command=upload_file1)
+    upload1_btn.pack(pady=5)
 
     file1_label = tk.Label(root, text="No file selected")
     file1_label.pack()
 
-    # ---------------------------------------------------
-    # Upload button #2 (OPTIONAL)
-    # ---------------------------------------------------
+    # Upload file #2 (optional)
     def upload_file2():
         file_path = filedialog.askopenfilename(
             title="Select Excel File",
@@ -157,28 +165,38 @@ def run_gui():
             selected_file2.set(file_path)
             file2_label.config(text=f"File 2 Selected: {file_path}")
 
-    upload2_btn = tk.Button(root, text="Select Second Excel File (optional, export Monday's date from computer)", command=upload_file2)
-    upload2_btn.pack(pady=10)
+    upload2_btn = tk.Button(root, text="Select Second Excel File (Optional)", command=upload_file2)
+    upload2_btn.pack(pady=5)
 
     file2_label = tk.Label(root, text="No second file selected")
     file2_label.pack()
 
-    # ---------------------------------------------------
-    # RUN BUTTON
-    # ---------------------------------------------------
+    # Progress bar and label
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+    progress_bar.pack(fill='x', padx=20, pady=10)
+
+    progress_label = tk.Label(root, text="")
+    progress_label.pack()
+
+    # Run button
+    def update_progress(value, key):
+        progress_var.set(value)
+        progress_label.config(text=f"Processing: {key}")
+        root.update_idletasks()
+
     def on_run():
         file1 = selected_file1.get().strip()
-        file2 = selected_file2.get().strip()
+        file2 = selected_file2.get().strip() or None
 
         if not file1:
             messagebox.showerror("Error", "Please select the first Excel file.")
             return
 
-        if not file2:
-            file2 = None  # single-file mode
-
         try:
-            output = run_processing(file1, file2)
+            output = run_processing(file1, file2, progress_callback=update_progress)
+            progress_var.set(100)
+            progress_label.config(text="Done!")
             messagebox.showinfo("Success", f"PDF created:\n{output}")
         except Exception as e:
             messagebox.showerror("Error", str(e))
@@ -187,9 +205,8 @@ def run_gui():
 
     root.mainloop()
 
-
 # ===================================================================
-# Launch UI instead of CLI
+# Launch UI
 # ===================================================================
 
 if __name__ == "__main__":
