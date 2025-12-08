@@ -1,6 +1,6 @@
 from pathlib import Path
 from reportlab.lib.pagesizes import letter
-from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary, generate_holds_report
+from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary, generate_holds_report, generate_conflicts_report
 from numbered_canvas import NumberedCanvas
 from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range, aggregate_data
 import os
@@ -12,7 +12,7 @@ from tkinter import ttk, messagebox, filedialog
 #                           PROCESSING FUNCTIONS
 # ===================================================================
 
-def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, blocked=False, final_uid=0, progress_callback=None, cancel_event=None):
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, blocked=False, final_uid=0, progress_callback=None, cancel_event=None):
     groups = []
     single_item_orders = []
     pick_sheet_index = 1
@@ -38,7 +38,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
             pick_sheet_index += 1
             continue
 
-        if len(order["items"]) == 1 and order["uid"] > final_uid:
+        if len(order["items"]) == 1 and order["items"][0]["quantity"] == 1 and order["uid"] > final_uid:
             single_item_orders.append(order)
             pick_sheet_index += 1
             continue
@@ -51,6 +51,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
     # Add single-item orders and holds reports
     groups.append(generate_customer_summary(c, single_item_orders, max_date))
     groups.append(generate_holds_report(c, holds))
+    groups.append(generate_conflicts_report(c, conflicts))
 
     # Final callback at 100%
     if progress_callback:
@@ -66,7 +67,7 @@ def run_processing(file1, file2=None, progress_callback=None):
     if file2 is None:
         # ---------------- SINGLE FILE MODE ----------------
         data = excel_to_dicts(file1)
-        grouped_data = group_data(data)
+        grouped_data, conflicts = group_data(data)
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
@@ -74,16 +75,19 @@ def run_processing(file1, file2=None, progress_callback=None):
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, progress_callback=progress_callback))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, progress_callback=progress_callback))
         c.save()
 
     else:
         # ---------------- TWO FILE MODE ----------------
         datas = []
         for file in [file1, file2]:
-            grouped_data = group_data(excel_to_dicts(file))
+            grouped_data, _ = group_data(excel_to_dicts(file))
             _, max_date = get_date_range(grouped_data)
             datas.append({"grouped_data": grouped_data, "date": max_date})
+
+        # only use for conflicts initialization
+        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2))  # initialize conflicts
 
         datas.sort(key=lambda item: item["date"], reverse=True)
 
@@ -101,8 +105,11 @@ def run_processing(file1, file2=None, progress_callback=None):
         i = 1
         for key in sorted_grouped_data1:
             if key in sorted_grouped_data0:
+                num_items = 0
                 sorted_grouped_data1[key]['uid'] = sorted_grouped_data0[key]['uid']
-                sorted_grouped_data1[key]['num_items'] = len(sorted_grouped_data0[key]['items']) + len(sorted_grouped_data1[key]['items'])
+                for item in sorted_grouped_data0[key]['items'] + sorted_grouped_data1[key]['items']:
+                    num_items += item.get('quantity', 1)
+                sorted_grouped_data1[key]['num_items'] = num_items
             else:
                 sorted_grouped_data1[key]['uid'] = len(sorted_grouped_data0) + i
                 i += 1
@@ -114,7 +121,7 @@ def run_processing(file1, file2=None, progress_callback=None):
         filename = f"{formatted}.pdf"
 
         c = NumberedCanvas(filename, pagesize=letter)
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date1, True, len(sorted_grouped_data0), progress_callback=progress_callback))
+        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date1, conflicts, True, len(sorted_grouped_data0), progress_callback=progress_callback))
         c.save()
 
     os.system(f'open "{filename}"')

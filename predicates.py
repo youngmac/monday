@@ -15,7 +15,7 @@ def is_important(title):
         return True
     important_words = ["hold", "cancel", "ups", "next", "2-day", "2 day"
                        , "overnight", "express", "priority", "hook me up"
-                       , "insulation", "cryo", "mystery"]
+                       , "insulation", "cryo", "mystery", "ship"]
     return any(word in title.lower() for word in important_words)
 
 def is_gear(title):
@@ -26,6 +26,7 @@ def is_gear(title):
         or "500ml" in title
         or "1000 ml" in title
         or"1000ml" in title
+        or "acclimation" in title
     )
 
 def is_tc(title):
@@ -35,6 +36,7 @@ def is_tc(title):
         and " tc" in title
         and not is_gear(title)
         and title != "basic tc acclimation kit"))
+        and "acclimation mix" not in title
         or (bool(re.search(r'\d{3,4}', title)) and ("5 pack" in title or "10 pack" in title))
     )
 

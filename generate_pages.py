@@ -4,9 +4,10 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from weather import get_alerting_forecast
 import config
-from predicates import is_important, is_plant, is_tc, could_be_plant, could_be_tc
+from predicates import is_important, is_plant, is_tc, could_be_plant, could_be_tc, is_any_plant
 from reportlab.pdfbase import pdfmetrics
 from datetime import date
+from order_utils import name_address_to_key
 
 
 # TODO get rid of magic number ;)
@@ -183,8 +184,35 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         c.drawString(center_x - 30, section_y + 20, cp_label)
         c.drawString(center_x - 30 + cp_width + spacing, section_y + 20, hp_label)
 
+    def draw_cost_footer():
+        nonlocal total_cost
+        nonlocal total_plant_cost
+        nonlocal y_start
+
+        # Height needed for this footer line
+        line_height = 16
+
+        # If the remaining space is too small, start a new page
+        if y_start < config.MARGIN + line_height + 60:
+            draw_footer()
+            c.showPage()
+            # reset page and header
+            y_start = height - config.MARGIN - 30
+            draw_header()
+
+        # Draw cost line (bold)
+        c.setFont("Helvetica-Bold", 14)
+        cost_line = f"Estimated Plant Cost: ${total_plant_cost:.2f}    Total Cost: ${total_cost:.2f}"
+        c.drawString(config.MARGIN, y_start, cost_line)
+
+        # Move cursor downward slightly for final footer spacing
+        y_start -= line_height
+        
+
     draw_header()
     num_items = 0
+    total_cost = 0.0
+    total_plant_cost = 0.0
 
     for item in customer_data['items']:
         # Default font for regular items
@@ -192,6 +220,11 @@ def generate_pick_sheet(c, customer_data, boxed=False):
 
         title = item['title']
         qty = item.get('quantity', 1)
+
+        if is_any_plant(title):
+            total_plant_cost += item.get('price', 0.0)
+        total_cost += item.get('price', 0.0)
+
 
         # If the item title is important, use the special font
         if is_important(title):
@@ -217,6 +250,14 @@ def generate_pick_sheet(c, customer_data, boxed=False):
 
         c.drawString(title_x, y_start, title)
 
+        # --- (DEBUG) Draw Price (right aligned) ---
+        # price = item.get("price", 0.0)
+        # price_str = f"${price:,.2f}"
+        # price_x = width - config.MARGIN
+        # c.setFont("Helvetica", 12)
+        # c.drawRightString(price_x, y_start, price_str)
+        # --- (END DEBUG) ---
+
         # --- Draw Line Separator ---
         num_items += qty
         y_start -= 7
@@ -232,6 +273,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
             y_start = height - config.MARGIN - 30
             draw_header()
 
+    draw_cost_footer()
     draw_footer()
     return num_pages
 
@@ -463,5 +505,122 @@ def generate_holds_report(c, holds):
             c.setFont("Helvetica", 10)
 
     # Save PDF
+    c.showPage()
+    return page_count
+
+def generate_conflicts_report(c, conflicts, max_width=470):
+    """
+    Draws a report listing username/address conflicts, with wrapping for long lines.
+    The first part (username or address) is drawn in italics.
+    Returns the number of pages created.
+    """
+    width, height = letter
+    line_h = 16
+
+    def draw_wrapped_italic_text(x, y, full_text, font_name="Helvetica", font_size=10):
+        """
+        Draws text that wraps if it exceeds max_width.
+        The first part (before '→') is italic.
+        Returns the new y-coordinate after drawing.
+        """
+        # Split into first part and rest
+        if "→" in full_text:
+            first_part, rest = full_text.split("→", 1)
+            first_part = first_part.strip()
+            rest = "→" + rest.strip()
+        else:
+            first_part = full_text
+            rest = ""
+
+        # Draw first part in italics
+        first_width = pdfmetrics.stringWidth(first_part, font_name + "-Oblique", font_size)
+        if first_width > max_width:
+            # Split first_part into words to wrap
+            words = first_part.split()
+            current_line = ""
+            for word in words:
+                test_line = current_line + (" " if current_line else "") + word
+                test_width = pdfmetrics.stringWidth(test_line, font_name + "-Oblique", font_size)
+                if test_width <= max_width:
+                    current_line = test_line
+                else:
+                    c.setFont(font_name + "-Oblique", font_size)
+                    c.drawString(x, y, current_line)
+                    y -= line_h
+                    current_line = word
+            if current_line:
+                c.setFont(font_name + "-Oblique", font_size)
+                c.drawString(x, y, current_line)
+                y -= line_h
+            first_part_width = 0
+        else:
+            c.setFont(font_name + "-Oblique", font_size)
+            c.drawString(x, y, first_part)
+            first_part_width = first_width
+            y -= 0  # same line
+
+        # Draw rest normally with wrapping
+        words = rest.split()
+        current_line = ""
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            test_width = pdfmetrics.stringWidth(test_line, font_name, font_size)
+            if test_width + first_part_width <= max_width:
+                current_line = test_line
+            else:
+                c.setFont(font_name, font_size)
+                c.drawString(x + (first_part_width if first_part_width else 0), y, current_line)
+                y -= line_h
+                current_line = word
+                first_part_width = 0  # only apply first part width to first line
+        if current_line:
+            c.setFont(font_name, font_size)
+            c.drawString(x + (first_part_width if first_part_width else 0), y, current_line)
+            y -= line_h
+
+        return y
+
+    page_count = 1
+    y = height - 50
+
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, y, "Username / Address Change Report")
+    y -= 30
+
+    # --- Address conflicts ---
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, "Addresses used by multiple usernames:")
+    y -= line_h
+
+    if conflicts.get("address_conflicts"):
+        for address, users in conflicts["address_conflicts"].items():
+            line_text = f"{address} → {', '.join(users)}"
+            if y < 50:
+                c.showPage()
+                page_count += 1
+                y = height - 50
+            y = draw_wrapped_italic_text(70, y, line_text)
+    else:
+        y = draw_wrapped_italic_text(70, y, "None detected")
+
+    y -= 20
+
+    # --- Username conflicts ---
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, "Usernames linked to multiple addresses:")
+    y -= line_h
+
+    if conflicts.get("username_conflicts"):
+        for user, addresses in conflicts["username_conflicts"].items():
+            line_text = f"{user} → {', '.join(addresses)}"
+            if y < 50:
+                c.showPage()
+                page_count += 1
+                y = height - 50
+            y = draw_wrapped_italic_text(70, y, line_text)
+    else:
+        y = draw_wrapped_italic_text(70, y, "None detected")
+
     c.showPage()
     return page_count

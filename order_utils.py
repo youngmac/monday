@@ -37,63 +37,86 @@ def name_address_to_key(row: dict) -> str:
     )
 
 
-def group_data(data: list[dict]) -> dict:
+def group_data(data: list[dict]) -> tuple[dict, dict]:
     """
     Groups rows by recipient's name and address.
     Combines items with the same title by summing quantity.
-    Assumes prices are in USD and ignores variants/SKUs.
+    Detects conflicts where the same username maps to multiple addresses or vice versa.
+    Does NOT normalize addresses.
+    
+    Returns:
+        grouped_data: normal grouped data
+        conflicts: {
+            "address_conflicts": {address: set(usernames)},
+            "username_conflicts": {username: set(addresses)}
+        }
     """
     grouped_data = {}
+
+    # Track username/address relationships for conflict detection
+    address_to_usernames = {}
+    username_to_addresses = {}
 
     for row in data:
         key = name_address_to_key(row)
 
-        # # Ignore cancelled orders
-        # if (row.get("Order Status") != "Ready to Ship"):
-        #     continue
+        username = row.get("Palmstreet UserName") or ""
+        street_1 = row.get("Street Line 1") or ""
+        street_2 = row.get("Street Line 2") or ""
+        city = row.get("City") or ""
+        state = row.get("State") or ""
+        zip_code = row.get("Zip/Postal Code") or ""
 
-        title = (row.get("Item Title") or "")
+        # Construct full address for conflict tracking (no normalization)
+        address = f"{street_1}, " + (f"{street_2}, " if street_2 else "") + f"{city}, {state} {zip_code}"
+
+        # Track conflicts
+        address_to_usernames.setdefault(address, set()).add(username)
+        username_to_addresses.setdefault(username, set()).add(address)
+
+        # --- Group items ---
+        title = row.get("Item Title") or ""
         price = float(row.get("Item Price") or 0)
         quantity = int(row.get("Quantity") or 0)
-        time = (row.get("Order Date(PDT)") or "")
+        time = row.get("Order Date(PDT)") or ""
 
         if key not in grouped_data:
-            street_2 = (row.get("Street Line 2") or "")
-            address = (
-                (row.get("Street Line 1") or "") + ", " +
-                (street_2 + ", " if street_2 else "") +
-                (row.get("City") or "") + ", " +
-                (row.get("State") or "") + " " +
-                (row.get("Zip/Postal Code") or "")
-            )
-
             grouped_data[key] = {
-                "name": (row.get("Recipient Name") or ""),
-                "username": (row.get("Palmstreet UserName") or ""),
+                "name": row.get("Recipient Name") or "",
+                "username": username,
                 "address": address,
-                "state": (row.get("State") or ""),
+                "state": state,
                 "items": {},
             }
 
-        # --- Group items by title ---
         items = grouped_data[key]["items"]
         if title in items:
             items[title]["quantity"] += quantity
+            items[title]["price"] += price * quantity
             if time > items[title]["time"]:
                 items[title]["time"] = time
         else:
             items[title] = {
                 "title": title,
-                "price": price,
+                "price": price * quantity,
                 "quantity": quantity,
                 "time": time,
             }
 
-    # ✅ Convert all items dicts back to lists (AFTER the loop)
+    # Convert items dicts to lists
     for key in grouped_data:
         grouped_data[key]["items"] = list(grouped_data[key]["items"].values())
 
-    return grouped_data
+    # Build conflicts: only keep entries with more than one unique mapping
+    address_conflicts = {addr: users for addr, users in address_to_usernames.items() if len(users) > 1}
+    username_conflicts = {user: addrs for user, addrs in username_to_addresses.items() if len(addrs) > 1}
+
+    conflicts = {
+        "address_conflicts": address_conflicts,
+        "username_conflicts": username_conflicts,
+    }
+
+    return grouped_data, conflicts
 
 
 def get_date_range(grouped_data: dict) -> tuple[datetime | None, datetime | None]:

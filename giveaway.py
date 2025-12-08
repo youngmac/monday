@@ -40,7 +40,7 @@ def main():
 
 
     # ------------------- GIVEAWAY -------------------
-    target_date = date(2025, 11, 29)
+    target_date = date(2025, 12, 6)
     entries = []
     non_entries = []
     for key in sorted_grouped_data:
