@@ -155,7 +155,7 @@ def run_gui():
             selected_file1.set(file_path)
             file1_label.config(text=f"File 1 Selected: {file_path}")
 
-    upload1_btn = tk.Button(root, text="Select First Excel File", command=upload_file1)
+    upload1_btn = tk.Button(root, text="Select First Excel File (email ready to ship from mobile device)", command=upload_file1)
     upload1_btn.pack(pady=5)
 
     file1_label = tk.Label(root, text="No file selected")
@@ -172,7 +172,7 @@ def run_gui():
             selected_file2.set(file_path)
             file2_label.config(text=f"File 2 Selected: {file_path}")
 
-    upload2_btn = tk.Button(root, text="Select Second Excel File (Optional)", command=upload_file2)
+    upload2_btn = tk.Button(root, text="Select Second Excel File (Optional, download today's sales from computer)", command=upload_file2)
     upload2_btn.pack(pady=5)
 
     file2_label = tk.Label(root, text="No second file selected")
