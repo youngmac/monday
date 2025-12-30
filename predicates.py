@@ -38,6 +38,7 @@ def is_tc(title):
         and title != "basic tc acclimation kit"))
         and "acclimation mix" not in title
         or (bool(re.search(r'\d{3,4}', title)) and ("5 pack" in title or "10 pack" in title))
+        or bool(re.fullmatch(r"0[1-9]", title))
     )
 
 def is_plant(title):
@@ -61,6 +62,7 @@ def is_any_plant(title):
     return is_tc(title) or is_plant(title) or could_be_tc(title) or could_be_plant(title)
 
 def is_future_hold(text_in: str, purchase_date):
+    # return None, None
     now = datetime.now()
     today = now.date()
     def can_hold(hold_date):

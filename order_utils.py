@@ -202,43 +202,62 @@ def sort_grouped_data(grouped_data):
 # input data sorted according to sort_grouped_data function
 def aggregate_data(data):
     aggregate = {}
-    plants = []
+    plants = {}   # plant_name -> price
     holds = {}
+
     for key, order in data.items():
         for item in order["items"]:
             title = item["title"].lower()
+
             potential_hold, hold_text = is_future_hold(title, item["time"])
-            if potential_hold != None:
-                holds[key] = {"date": potential_hold, "text": hold_text, "name": order["username"], "address": order["address"]}
+            if potential_hold is not None:
+                holds[key] = {
+                    "date": potential_hold,
+                    "text": hold_text,
+                    "name": order["username"],
+                    "address": order["address"],
+                }
+
             if is_any_plant(title):
-                plants.append(title)
+                plants[title] = item["price"]
                 continue
-            elif title in aggregate:
-                aggregate[title] += item["quantity"]
-            else:
-                aggregate[title] = item["quantity"]
 
+            aggregate[title] = aggregate.get(title, 0) + item["quantity"]
 
-    counts = Counter(plants)
-    dupl_plants = {plant: count for plant, count in counts.items() if count > 1}
-    plants = [plant for plant in plants if counts[plant] == 1]
+    # Count plant duplicates
+    plant_counts = Counter(plants.keys())
 
-    for plant in dupl_plants:
-        aggregate[plant] = dupl_plants[plant]
+    # Plants appearing more than once go into aggregate
+    for plant, count in plant_counts.items():
+        if count > 1:
+            aggregate[plant] = count
 
-    sorted_data = dict(sorted(
-        aggregate.items(),
-        key=lambda item: (-item[1], item[0].lower())  # sort by count DESC, then name ASC
-    ))
+    # Keep only unique plants in the plants dict
+    plants = {
+        plant: price
+        for plant, price in plants.items()
+        if plant_counts[plant] == 1
+    }
 
-    sorted_plants = sorted(
-        plants,
-        key=lambda name: (
-            is_tc(name),    # sort tc first (True -> 1 -> -1 for descending)
-            could_be_tc(name),
-            is_plant(name),
-            could_be_plant(name),
-            name.lower()
+    # Sort aggregate
+    sorted_data = dict(
+        sorted(
+            aggregate.items(),
+            key=lambda item: (-item[1], item[0].lower())
+        )
+    )
+
+    # Sort plants (still a dict!)
+    sorted_plants = dict(
+        sorted(
+            plants.items(),
+            key=lambda item: (
+                # is_tc(item[0]),
+                # could_be_tc(item[0]),
+                # is_plant(item[0]),
+                # could_be_plant(item[0]),
+                item[0].lower(),
+            )
         )
     )
 

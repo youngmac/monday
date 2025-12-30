@@ -250,13 +250,12 @@ def generate_pick_sheet(c, customer_data, boxed=False):
 
         c.drawString(title_x, y_start, title)
 
-        # --- (DEBUG) Draw Price (right aligned) ---
-        # price = item.get("price", 0.0)
-        # price_str = f"${price:,.2f}"
-        # price_x = width - config.MARGIN
-        # c.setFont("Helvetica", 12)
-        # c.drawRightString(price_x, y_start, price_str)
-        # --- (END DEBUG) ---
+        # --- Draw Price (right aligned) ---
+        price = item.get("price", 0.0)
+        price_str = f"${price:,.2f}"
+        price_x = width - config.MARGIN
+        c.setFont("Helvetica", 12)
+        c.drawRightString(price_x, y_start, price_str)
 
         # --- Draw Line Separator ---
         num_items += qty
@@ -359,6 +358,7 @@ def generate_order_summary(c, aggregated_data, plants, date):
             c.setFont("Helvetica", 10)
 
         c.drawString(margin, y, plant)
+        c.drawRightString(width - config.MARGIN, y, f"${plants.get(plant, 0.0):,.2f}")
         y -= line_height
 
     # Space and total count

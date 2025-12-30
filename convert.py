@@ -22,7 +22,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
     total_orders = max(total_orders, 1)  # avoid division by zero
 
     groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
-
+    groups.append(generate_conflicts_report(c, conflicts))
     for key in sorted_grouped_data:
         if cancel_event and cancel_event.is_set():
             print("PDF generation cancelled.")
@@ -51,7 +51,6 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
     # Add single-item orders and holds reports
     groups.append(generate_customer_summary(c, single_item_orders, max_date))
     groups.append(generate_holds_report(c, holds))
-    groups.append(generate_conflicts_report(c, conflicts))
 
     # Final callback at 100%
     if progress_callback:
