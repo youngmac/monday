@@ -8,6 +8,7 @@ from predicates import is_important, is_plant, is_tc, could_be_plant, could_be_t
 from reportlab.pdfbase import pdfmetrics
 from datetime import date
 from order_utils import name_address_to_key
+from config import FIRST_ITEM_SHIP_COST, ADDITIONAL_ITEM_SHIP_COST
 
 
 # TODO get rid of magic number ;)
@@ -187,6 +188,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
     def draw_cost_footer():
         nonlocal total_cost
         nonlocal total_plant_cost
+        nonlocal total_ship_cost
         nonlocal y_start
 
         # Height needed for this footer line
@@ -202,7 +204,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
 
         # Draw cost line (bold)
         c.setFont("Helvetica-Bold", 14)
-        cost_line = f"Estimated Plant Cost: ${total_plant_cost:.2f}    Total Cost: ${total_cost:.2f}"
+        cost_line = f"~Shipping: ${total_ship_cost:.2f}    ~Plants: ${total_plant_cost:.2f}    Subtotal: ${total_cost:.2f}    Total: ${total_cost + total_ship_cost:.2f}"
         c.drawString(config.MARGIN, y_start, cost_line)
 
         # Move cursor downward slightly for final footer spacing
@@ -213,6 +215,7 @@ def generate_pick_sheet(c, customer_data, boxed=False):
     num_items = 0
     total_cost = 0.0
     total_plant_cost = 0.0
+    total_ship_cost = 0.0
 
     for item in customer_data['items']:
         # Default font for regular items
@@ -224,6 +227,12 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         if is_any_plant(title):
             total_plant_cost += item.get('price', 0.0)
         total_cost += item.get('price', 0.0)
+
+        if item['price'] > .99:
+            if total_ship_cost == 0.0:
+                total_ship_cost += FIRST_ITEM_SHIP_COST
+            else:
+                total_ship_cost += ADDITIONAL_ITEM_SHIP_COST
 
 
         # If the item title is important, use the special font

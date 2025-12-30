@@ -13,3 +13,6 @@ EXTREME_TEMP_LABEL_FONT = ("Helvetica-Bold", 10)
 CP_HP_FONT = ("Helvetica", 10)
 ITEM_FONT = ("Helvetica", 14)
 ITEM_IMPORTANT_FONT = ("Helvetica-Bold", 14)
+
+FIRST_ITEM_SHIP_COST = 9.49
+ADDITIONAL_ITEM_SHIP_COST = 1.49
