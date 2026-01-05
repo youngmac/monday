@@ -151,6 +151,11 @@ def sort_grouped_data(grouped_data):
     """
     def item_count(data):
         return len(data)
+        # total = 0
+        # for item in data:
+        #     total += item.get("quantity", 0)
+        # return total
+        
 
     def earliest_date(data):
         dates = []
@@ -200,7 +205,7 @@ def sort_grouped_data(grouped_data):
     return dict(data)
 
 # input data sorted according to sort_grouped_data function
-def aggregate_data(data):
+def aggregate_data(data, bypass_future_hold=False):
     aggregate = {}
     plants = {}   # plant_name -> price
     holds = {}
@@ -208,15 +213,15 @@ def aggregate_data(data):
     for key, order in data.items():
         for item in order["items"]:
             title = item["title"].lower()
-
-            potential_hold, hold_text = is_future_hold(title, item["time"])
-            if potential_hold is not None:
-                holds[key] = {
-                    "date": potential_hold,
-                    "text": hold_text,
-                    "name": order["username"],
-                    "address": order["address"],
-                }
+            if not bypass_future_hold:
+                potential_hold, hold_text = is_future_hold(title, item["time"])
+                if potential_hold is not None:
+                    holds[key] = {
+                        "date": potential_hold,
+                        "text": hold_text,
+                        "name": order["username"],
+                        "address": order["address"],
+                    }
 
             if is_any_plant(title):
                 plants[title] = item["price"]

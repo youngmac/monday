@@ -58,8 +58,9 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
 
     return groups
 
-def run_processing(file1, file2=None, progress_callback=None):
+def run_processing(file1, file2=None, progress_callback=None, bypass_future_hold=False):
     """Runs your existing logic. file2 may be None."""
+    bypass_future_hold = bool(bypass_future_hold)
     file1 = Path(file1)
     file2 = Path(file2) if file2 else None
 
@@ -70,7 +71,7 @@ def run_processing(file1, file2=None, progress_callback=None):
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
-        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data)
+        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data, bypass_future_hold)
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
@@ -114,7 +115,7 @@ def run_processing(file1, file2=None, progress_callback=None):
                 i += 1
 
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
-        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data)
+        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data, bypass_future_hold)
 
         formatted = max_date1.strftime("%A_%m-%d-%y")
         filename = f"{formatted}.pdf"
@@ -185,6 +186,15 @@ def run_gui():
     progress_label = tk.Label(root, text="")
     progress_label.pack()
 
+    bypass_holds_var = tk.BooleanVar(value=False)
+
+    bypass_holds_check = tk.Checkbutton(
+        root,
+        text="Bypass Holds",
+        variable=bypass_holds_var
+    )
+    bypass_holds_check.pack(pady=10)
+
     # Run button
     def update_progress(value, key):
         progress_var.set(value)
@@ -194,13 +204,19 @@ def run_gui():
     def on_run():
         file1 = selected_file1.get().strip()
         file2 = selected_file2.get().strip() or None
+        bypass_holds = bypass_holds_var.get()
 
         if not file1:
             messagebox.showerror("Error", "Please select the first Excel file.")
             return
 
         try:
-            output = run_processing(file1, file2, progress_callback=update_progress)
+            output = run_processing(
+                file1,
+                file2,
+                progress_callback=update_progress,
+                bypass_future_hold=bypass_holds
+            )
             progress_var.set(100)
             progress_label.config(text="Done!")
             messagebox.showinfo("Success", f"PDF created:\n{output}")
