@@ -73,7 +73,7 @@ def draw_forecast_chart(c, forecast, x=50, y=100, width=500):
         c.setFont(*config.FORECAST_LABEL_FONT)
     return 0
 
-def generate_pick_sheet(c, customer_data, boxed=False):
+def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
     """
     Generate a pick sheet PDF page(s) for a customer.
     """
@@ -96,12 +96,22 @@ def generate_pick_sheet(c, customer_data, boxed=False):
         uid_width = c.stringWidth(uid_text, "Helvetica", 100)
         c.drawString(width - config.MARGIN - uid_width, y_start - 65, uid_text)
 
-        if boxed:
+        if boxed and not double_boxed:
             x = width - config.MARGIN - uid_width
             y = y_start - 70
             padding = 5
             c.setLineWidth(5)
             c.rect(x - padding, y - padding, uid_width + 2 * padding, 90, stroke=1, fill=0)
+            c.setLineWidth(1)
+        elif double_boxed:
+            x = width - config.MARGIN - uid_width
+            y = y_start - 70
+            padding_outer = 8
+            padding_inner = 4
+            c.setLineWidth(1)
+            c.rect(x - padding_outer, y - padding_outer, uid_width + 2 * padding_outer, 98, stroke=1, fill=0)
+            c.setLineWidth(1)
+            c.rect(x - padding_inner, y - padding_inner, uid_width + 2 * padding_inner, 90, stroke=1, fill=0)
             c.setLineWidth(1)
 
         y_start -= 25

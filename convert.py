@@ -12,7 +12,7 @@ from tkinter import ttk, messagebox, filedialog
 #                           PROCESSING FUNCTIONS
 # ===================================================================
 
-def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, blocked=False, final_uid=0, progress_callback=None, cancel_event=None):
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, blocked=False, final_uid=0, progress_callback=None, double_blocked=False, cancel_event=None):
     groups = []
     single_item_orders = []
     pick_sheet_index = 1
@@ -44,7 +44,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
             continue
 
         print(f"Generating pick sheet for {key} ({pick_sheet_index}/{total_orders})")
-        groups.append(generate_pick_sheet(c, order, blocked))
+        groups.append(generate_pick_sheet(c, order, blocked, double_blocked))
         c.showPage()
         pick_sheet_index += 1
 
@@ -58,11 +58,12 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
 
     return groups
 
-def run_processing(file1, file2=None, progress_callback=None, bypass_future_hold=False):
+def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass_future_hold=False):
     """Runs your existing logic. file2 may be None."""
     bypass_future_hold = bool(bypass_future_hold)
     file1 = Path(file1)
     file2 = Path(file2) if file2 else None
+    file3 = Path(file3) if file3 else None
 
     if file2 is None:
         # ---------------- SINGLE FILE MODE ----------------
@@ -78,7 +79,7 @@ def run_processing(file1, file2=None, progress_callback=None, bypass_future_hold
         c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, progress_callback=progress_callback))
         c.save()
 
-    else:
+    elif file2 is not None and file3 is None:
         # ---------------- TWO FILE MODE ----------------
         datas = []
         for file in [file1, file2]:
@@ -123,6 +124,85 @@ def run_processing(file1, file2=None, progress_callback=None, bypass_future_hold
         c = NumberedCanvas(filename, pagesize=letter)
         c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date1, conflicts, True, len(sorted_grouped_data0), progress_callback=progress_callback))
         c.save()
+    else: # file3 is not None
+         # ---------------- START W TWO FILE MODE ----------------
+        datas = []
+        for file in [file1, file2]:
+            grouped_data, _ = group_data(excel_to_dicts(file))
+            _, max_date = get_date_range(grouped_data)
+            datas.append({"grouped_data": grouped_data, "date": max_date})
+
+        # only use for conflicts initialization
+        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2))  # initialize conflicts
+
+        datas.sort(key=lambda item: item["date"], reverse=True)
+
+        grouped_data0 = datas[1]["grouped_data"]
+        grouped_data1 = datas[0]["grouped_data"]
+        max_date0 = datas[1]["date"]
+        max_date1 = datas[0]["date"]
+
+        if max_date0 >= min(get_date_range(grouped_data1)):
+            raise ValueError("Date ranges of the two files overlap.")
+
+        sorted_grouped_data0 = sort_grouped_data(grouped_data0)
+        sorted_grouped_data1 = sort_grouped_data(grouped_data1)
+
+        i = 1
+        for key in sorted_grouped_data1:
+            if key in sorted_grouped_data0:
+                num_items = 0
+                sorted_grouped_data1[key]['uid'] = sorted_grouped_data0[key]['uid']
+                for item in sorted_grouped_data0[key]['items'] + sorted_grouped_data1[key]['items']:
+                    num_items += item.get('quantity', 1)
+                sorted_grouped_data1[key]['num_items'] = num_items
+            else:
+                sorted_grouped_data1[key]['uid'] = len(sorted_grouped_data0) + i
+                i += 1
+
+        sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
+
+        # ---------------- ADD IN THIRD FILE ----------------
+        grouped_data3, _ = group_data(excel_to_dicts(file3))
+        _, max_date3 = get_date_range(grouped_data3)
+        sorted_grouped_data3 = sort_grouped_data(grouped_data3)
+
+        # Merge the third file into the existing data
+        j = 1
+        for key in sorted_grouped_data3:
+            # print(f"Processing third file key: {key}")
+            if key in sorted_grouped_data:
+                num_items = 0
+                sorted_grouped_data3[key]['uid'] = sorted_grouped_data[key]['uid']
+                for item in sorted_grouped_data[key]['items'] + sorted_grouped_data3[key]['items']:
+                    num_items += item.get('quantity', 1)
+                # print(f"if Total items for {key}: {num_items}")
+                # print(f"if Assigning existing UID for {key}: {sorted_grouped_data[key]['uid']}")
+                sorted_grouped_data3[key]['num_items'] = num_items
+            elif key in sorted_grouped_data0:
+                num_items = 0
+                sorted_grouped_data3[key]['uid'] = sorted_grouped_data0[key]['uid']
+                for item in sorted_grouped_data0[key]['items'] + sorted_grouped_data3[key]['items']:
+                    num_items += item.get('quantity', 1)
+                # print(f"elif Total items for {key}: {num_items}")
+                # print(f"elif Assigning existing UID for {key}: {sorted_grouped_data0[key]['uid']}")
+                sorted_grouped_data3[key]['num_items'] = num_items
+            else:
+                # print(f"else Assigning new UID for {key}: {len(sorted_grouped_data) + j}")
+                sorted_grouped_data3[key]['uid'] = len(sorted_grouped_data0) + i + j
+                j += 1
+
+        # third file's items matched with first two's uids
+        merged_grouped_data = dict(sorted(sorted_grouped_data3.items(), key=lambda x: x[1].get('uid', 0)))
+
+        aggregated_data, plants, holds = aggregate_data(merged_grouped_data, bypass_future_hold)
+
+        formatted = max_date3.strftime("%A_%m-%d-%y")
+        filename = f"{formatted}.pdf"
+
+        c = NumberedCanvas(filename, pagesize=letter)
+        c.set_groups(generate_pages(c, merged_grouped_data, aggregated_data, plants, holds, max_date3, conflicts, True, len(merged_grouped_data), progress_callback=progress_callback, double_blocked=True))
+        c.save()
 
     os.system(f'open "{filename}"')
     return filename
@@ -143,7 +223,8 @@ def run_gui():
 
     selected_file1 = tk.StringVar()
     selected_file2 = tk.StringVar()
-
+    selected_file3 = tk.StringVar()
+    
     # Upload file #1
     def upload_file1():
         file_path = filedialog.askopenfilename(
@@ -172,11 +253,28 @@ def run_gui():
             selected_file2.set(file_path)
             file2_label.config(text=f"File 2 Selected: {file_path}")
 
-    upload2_btn = tk.Button(root, text="Select Second Excel File (Optional, download today's sales from computer)", command=upload_file2)
+    upload2_btn = tk.Button(root, text="Select Second Excel File (Optional, download the day's sales from computer)", command=upload_file2)
     upload2_btn.pack(pady=5)
 
     file2_label = tk.Label(root, text="No second file selected")
     file2_label.pack()
+
+    # Upload file #3 (optional)
+    def upload_file3():
+        file_path = filedialog.askopenfilename(
+            title="Select Excel File",
+            initialdir=str(current_dir),
+            filetypes=[("Excel Files", "*.xls *.xlsx")]
+        )
+        if file_path:
+            selected_file3.set(file_path)
+            file3_label.config(text=f"File 3 Selected: {file_path}")
+
+    upload3_btn = tk.Button(root, text="Select Third Excel File (Optional, download today's sales from computer)", command=upload_file3)
+    upload3_btn.pack(pady=5)
+
+    file3_label = tk.Label(root, text="No third file selected")
+    file3_label.pack()
 
     # Progress bar and label
     progress_var = tk.DoubleVar()
@@ -204,6 +302,7 @@ def run_gui():
     def on_run():
         file1 = selected_file1.get().strip()
         file2 = selected_file2.get().strip() or None
+        file3 = selected_file3.get().strip() or None
         bypass_holds = bypass_holds_var.get()
 
         if not file1:
@@ -214,6 +313,7 @@ def run_gui():
             output = run_processing(
                 file1,
                 file2,
+                file3,
                 progress_callback=update_progress,
                 bypass_future_hold=bypass_holds
             )
@@ -232,4 +332,7 @@ def run_gui():
 # ===================================================================
 
 if __name__ == "__main__":
-    run_gui()
+    try:
+        run_gui()
+    except Exception as e:
+        print(f"An error occurred: {e}")
