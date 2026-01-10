@@ -147,12 +147,12 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
             y_start -= 22
             c.setFont("Helvetica-Bold", 14)
             c.drawString(config.MARGIN, y_start, "                    ** 2-DAY AIR UPS SHIPPING **")
-            # y_start -= 20
+            y_start += 20
         if customer_data["1day"]:
             y_start -= 22
             c.setFont("Helvetica-Bold", 14)
             c.drawString(config.MARGIN, y_start, "                    ** NEXT DAY AIR UPS SHIPPING **")
-            # y_start -= 20
+            y_start += 20
 
         # Add the weather forecast chart
         forecast = get_alerting_forecast(customer_data['address'])
