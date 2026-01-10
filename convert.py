@@ -38,7 +38,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
             pick_sheet_index += 1
             continue
 
-        if len(order["items"]) == 1 and order["items"][0]["quantity"] == 1 and order["uid"] > final_uid:
+        if len(order["items"]) == 1 and order["items"][0]["quantity"] == 1 and order["uid"] > final_uid and not blocked and not double_blocked:
             single_item_orders.append(order)
             pick_sheet_index += 1
             continue
@@ -270,7 +270,7 @@ def run_gui():
             selected_file3.set(file_path)
             file3_label.config(text=f"File 3 Selected: {file_path}")
 
-    upload3_btn = tk.Button(root, text="Select Third Excel File (Optional, download today's sales from computer)", command=upload_file3)
+    upload3_btn = tk.Button(root, text="Select Third Excel File (Optional, USE WITH CAUTION)", command=upload_file3)
     upload3_btn.pack(pady=5)
 
     file3_label = tk.Label(root, text="No third file selected")

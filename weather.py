@@ -91,7 +91,7 @@ def check_extreme_temps(forecast):
 
 
 def get_alerting_forecast(address):
-    return {} # Toggle to not use api calls
+    # return {} # Toggle to not use api calls
     lat, lon = get_coordinates(address)
     if lat == 0 and lon == 0:
         return {}

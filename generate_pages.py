@@ -241,8 +241,10 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
         if item['price'] > .99:
             if total_ship_cost == 0.0:
                 total_ship_cost += FIRST_ITEM_SHIP_COST
+                if item["quantity"] > 1:
+                    total_ship_cost += ADDITIONAL_ITEM_SHIP_COST * item["quantity"] - 1
             else:
-                total_ship_cost += ADDITIONAL_ITEM_SHIP_COST
+                total_ship_cost += ADDITIONAL_ITEM_SHIP_COST * item["quantity"]
 
 
         # If the item title is important, use the special font
