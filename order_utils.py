@@ -2,7 +2,8 @@ from datetime import datetime
 from openpyxl import load_workbook
 from pathlib import Path
 from collections import Counter
-from predicates import is_important, is_tc, is_plant, could_be_tc, could_be_plant, is_any_plant, is_future_hold
+from predicates import is_important, is_tc, is_plant, could_be_tc, could_be_plant, is_any_plant, is_future_hold, is_2_day, is_next_day
+from config import TWO_DAY_SHIP_COST, FIRST_ITEM_SHIP_COST, ADDITIONAL_ITEM_SHIP_COST, NEXT_DAY_SHIP_COST
 
 
 def excel_to_dicts(file_path: Path):
@@ -89,6 +90,15 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
                 "items": {},
             }
 
+        if "2day" not in grouped_data[key]:
+            grouped_data[key]["2day"] = False
+        if is_2_day(title):
+            grouped_data[key]["2day"] = True
+        if "1day" not in grouped_data[key]:
+            grouped_data[key]["1day"] = False
+        if is_next_day(title):
+            grouped_data[key]["1day"] = True
+
         items = grouped_data[key]["items"]
         if title in items:
             items[title]["quantity"] += quantity
@@ -98,10 +108,46 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
         else:
             items[title] = {
                 "title": title,
-                "price": price * quantity,
+                "price": price,
                 "quantity": quantity,
                 "time": time,
             }
+
+    # Calculate costs
+    for key in grouped_data:
+        subtotal = 0.0
+        plant_cost = 0.0
+        ship_cost = 0.0
+        for item_key in grouped_data[key]["items"]:
+            item = grouped_data[key]["items"][item_key]
+
+            # plant/subtotal
+            subtotal += item.get('price', 0.0) * item.get('quantity', 1)
+            if is_any_plant(item["title"]):
+                plant_cost += item.get('price', 0.0) * item.get('quantity', 1)
+
+            # shipping
+            if item.get('price', 0.0) > .99:
+                if ship_cost <= 0.01:
+                    ship_cost += FIRST_ITEM_SHIP_COST
+                    if item["quantity"] > 1:
+                        ship_cost += ADDITIONAL_ITEM_SHIP_COST * item["quantity"] - 1
+                else:
+                    ship_cost += ADDITIONAL_ITEM_SHIP_COST * item["quantity"]
+
+        # 2-day / 1-day special case
+        if grouped_data[key]["2day"]:
+                ship_cost += TWO_DAY_SHIP_COST
+                subtotal -= TWO_DAY_SHIP_COST
+        if grouped_data[key]["1day"]:
+            ship_cost += NEXT_DAY_SHIP_COST
+            subtotal -= NEXT_DAY_SHIP_COST
+
+        grouped_data[key]["costs"] = {}    
+        grouped_data[key]["costs"]["subtotal"] = round(subtotal, 2)
+        grouped_data[key]["costs"]["plant_cost"] = round(plant_cost, 2)
+        grouped_data[key]["costs"]["ship_cost"] = round(ship_cost, 2)
+        grouped_data[key]["costs"]["total_cost"] = round(subtotal + ship_cost, 2)
 
     # Convert items dicts to lists
     for key in grouped_data:
@@ -150,11 +196,11 @@ def sort_grouped_data(grouped_data):
         dict: Sorted data with 'uid' assigned to each group.
     """
     def item_count(data):
-        return len(data)
-        # total = 0
-        # for item in data:
-        #     total += item.get("quantity", 0)
-        # return total
+        # return len(data) (kept for compatibility legacy, don't use unless you have to)
+        total = 0
+        for item in data:
+            total += item.get("quantity", 0)
+        return total
         
 
     def earliest_date(data):
@@ -205,7 +251,7 @@ def sort_grouped_data(grouped_data):
     return dict(data)
 
 # input data sorted according to sort_grouped_data function
-def aggregate_data(data, bypass_future_hold=False):
+def aggregate_data(data):
     aggregate = {}
     plants = {}   # plant_name -> price
     holds = {}
@@ -213,15 +259,15 @@ def aggregate_data(data, bypass_future_hold=False):
     for key, order in data.items():
         for item in order["items"]:
             title = item["title"].lower()
-            if not bypass_future_hold:
-                potential_hold, hold_text = is_future_hold(title, item["time"])
-                if potential_hold is not None:
-                    holds[key] = {
-                        "date": potential_hold,
-                        "text": hold_text,
-                        "name": order["username"],
-                        "address": order["address"],
-                    }
+            potential_hold, hold_text = is_future_hold(title, item["time"])
+            if potential_hold is not None:
+                holds[key] = {
+                    "date": potential_hold,
+                    "text": hold_text,
+                    "name": order["username"],
+                    "address": order["address"],
+                    "items": order["items"],
+                }
 
             if is_any_plant(title):
                 plants[title] = item["price"]

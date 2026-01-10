@@ -1,6 +1,6 @@
 from pathlib import Path
 from reportlab.lib.pagesizes import letter
-from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary, generate_holds_report, generate_conflicts_report
+from generate_pages import generate_pick_sheet, generate_order_summary, generate_customer_summary, generate_holds_report, generate_conflicts_report, generate_hold_plants_report
 from numbered_canvas import NumberedCanvas
 from order_utils import excel_to_dicts, group_data, sort_grouped_data, get_date_range, aggregate_data
 import os
@@ -12,7 +12,7 @@ from tkinter import ttk, messagebox, filedialog
 #                           PROCESSING FUNCTIONS
 # ===================================================================
 
-def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, blocked=False, final_uid=0, progress_callback=None, double_blocked=False, cancel_event=None):
+def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, blocked=False, final_uid=0, progress_callback=None, bypass_future_hold=False, double_blocked=False, cancel_event=None):
     groups = []
     single_item_orders = []
     pick_sheet_index = 1
@@ -23,6 +23,8 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
 
     groups.append(generate_order_summary(c, aggregated_data, plants, max_date))
     groups.append(generate_conflicts_report(c, conflicts))
+    groups.append(generate_holds_report(c, holds))
+    groups.append(generate_hold_plants_report(c, holds))
     for key in sorted_grouped_data:
         if cancel_event and cancel_event.is_set():
             print("PDF generation cancelled.")
@@ -33,7 +35,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
 
         order = sorted_grouped_data[key]
 
-        if key in holds:
+        if key in holds and not bypass_future_hold:
             # Still count toward progress but skip actual page generation
             pick_sheet_index += 1
             continue
@@ -50,7 +52,6 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
 
     # Add single-item orders and holds reports
     groups.append(generate_customer_summary(c, single_item_orders, max_date))
-    groups.append(generate_holds_report(c, holds))
 
     # Final callback at 100%
     if progress_callback:
@@ -72,11 +73,21 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
-        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data, bypass_future_hold)
+        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data)
 
         filename = f"{formatted}.pdf"
         c = NumberedCanvas(filename, pagesize=letter)
-        c.set_groups(generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_date, conflicts, progress_callback=progress_callback))
+        c.set_groups(generate_pages(
+            c, 
+            sorted_grouped_data, 
+            aggregated_data, 
+            plants, 
+            holds, 
+            max_date, 
+            conflicts,
+            progress_callback=progress_callback,
+            bypass_future_hold=bypass_future_hold
+        ))
         c.save()
 
     elif file2 is not None and file3 is None:
@@ -103,6 +114,8 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
         sorted_grouped_data0 = sort_grouped_data(grouped_data0)
         sorted_grouped_data1 = sort_grouped_data(grouped_data1)
 
+        # Adjust costs for merge
+
         i = 1
         for key in sorted_grouped_data1:
             if key in sorted_grouped_data0:
@@ -114,9 +127,15 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
             else:
                 sorted_grouped_data1[key]['uid'] = len(sorted_grouped_data0) + i
                 i += 1
+            sorted_grouped_data1[key]['costs']['total_cost'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('total_cost', 0.0)
+            sorted_grouped_data1[key]['costs']['plant_cost'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('plant_cost', 0.0)
+            sorted_grouped_data1[key]['costs']['ship_cost'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('ship_cost', 0.0)
+            sorted_grouped_data1[key]['costs']['subtotal'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('subtotal', 0.0)
+            sorted_grouped_data1[key]['2day'] = sorted_grouped_data1[key]['2day'] or sorted_grouped_data0.get(key, {}).get('2day', False)
+            sorted_grouped_data1[key]['1day'] = sorted_grouped_data1[key]['1day'] or sorted_grouped_data0.get(key, {}).get('1day', False)
 
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
-        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data, bypass_future_hold)
+        aggregated_data, plants, holds = aggregate_data(sorted_grouped_data)
 
         formatted = max_date1.strftime("%A_%m-%d-%y")
         filename = f"{formatted}.pdf"
@@ -159,6 +178,12 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
             else:
                 sorted_grouped_data1[key]['uid'] = len(sorted_grouped_data0) + i
                 i += 1
+            sorted_grouped_data1[key]['costs']['total_cost'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('total_cost', 0.0)
+            sorted_grouped_data1[key]['costs']['plant_cost'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('plant_cost', 0.0)
+            sorted_grouped_data1[key]['costs']['ship_cost'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('ship_cost', 0.0)
+            sorted_grouped_data1[key]['costs']['subtotal'] += sorted_grouped_data0.get(key, {}).get('costs', {}).get('subtotal', 0.0)
+            sorted_grouped_data1[key]['2day'] = sorted_grouped_data1[key]['2day'] or sorted_grouped_data0.get(key, {}).get('2day', False)
+            sorted_grouped_data1[key]['1day'] = sorted_grouped_data1[key]['1day'] or sorted_grouped_data0.get(key, {}).get('1day', False)
 
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
 
@@ -191,11 +216,17 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
                 # print(f"else Assigning new UID for {key}: {len(sorted_grouped_data) + j}")
                 sorted_grouped_data3[key]['uid'] = len(sorted_grouped_data0) + i + j
                 j += 1
+            sorted_grouped_data3[key]['costs']['total_cost'] += sorted_grouped_data.get(key, {}).get('costs', {}).get('total_cost', 0.0)
+            sorted_grouped_data3[key]['costs']['plant_cost'] += sorted_grouped_data.get(key, {}).get('costs', {}).get('plant_cost', 0.0)
+            sorted_grouped_data3[key]['costs']['ship_cost'] += sorted_grouped_data.get(key, {}).get('costs', {}).get('ship_cost', 0.0)
+            sorted_grouped_data3[key]['costs']['subtotal'] += sorted_grouped_data.get(key, {}).get('costs', {}).get('subtotal', 0.0)
+            sorted_grouped_data3[key]['2day'] = sorted_grouped_data3[key]['2day'] or sorted_grouped_data1.get(key, {}).get('2day', False)
+            sorted_grouped_data3[key]['1day'] = sorted_grouped_data3[key]['1day'] or sorted_grouped_data1.get(key, {}).get('1day', False)
 
         # third file's items matched with first two's uids
         merged_grouped_data = dict(sorted(sorted_grouped_data3.items(), key=lambda x: x[1].get('uid', 0)))
 
-        aggregated_data, plants, holds = aggregate_data(merged_grouped_data, bypass_future_hold)
+        aggregated_data, plants, holds = aggregate_data(merged_grouped_data)
 
         formatted = max_date3.strftime("%A_%m-%d-%y")
         filename = f"{formatted}.pdf"

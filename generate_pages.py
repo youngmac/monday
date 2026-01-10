@@ -8,7 +8,6 @@ from predicates import is_important, is_plant, is_tc, could_be_plant, could_be_t
 from reportlab.pdfbase import pdfmetrics
 from datetime import date
 from order_utils import name_address_to_key
-from config import FIRST_ITEM_SHIP_COST, ADDITIONAL_ITEM_SHIP_COST
 
 
 # TODO get rid of magic number ;)
@@ -143,6 +142,18 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
                 cur_width += c.stringWidth(" to ", "Helvetica", 14)
                 c.drawString(config.MARGIN + cur_width, y_start, min_date.strftime("%A, %b %d"))
 
+        # 2-day shipping indicator
+        if customer_data["2day"]:
+            y_start -= 22
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(config.MARGIN, y_start, "                    ** 2-DAY AIR UPS SHIPPING **")
+            # y_start -= 20
+        if customer_data["1day"]:
+            y_start -= 22
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(config.MARGIN, y_start, "                    ** NEXT DAY AIR UPS SHIPPING **")
+            # y_start -= 20
+
         # Add the weather forecast chart
         forecast = get_alerting_forecast(customer_data['address'])
         if forecast or forecast == {}:
@@ -155,6 +166,7 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
         c.setStrokeColor(colors.black)
         c.line(config.MARGIN, y_start, width - config.MARGIN, y_start)
         y_start -= 17
+            
 
     def draw_footer():
         # Total number items/number items on this page
@@ -197,8 +209,9 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
 
     def draw_cost_footer():
         nonlocal total_cost
-        nonlocal total_plant_cost
-        nonlocal total_ship_cost
+        nonlocal plant_cost
+        nonlocal ship_cost
+        nonlocal subtotal
         nonlocal y_start
 
         # Height needed for this footer line
@@ -214,7 +227,7 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
 
         # Draw cost line (bold)
         c.setFont("Helvetica-Bold", 14)
-        cost_line = f"~Shipping: ${total_ship_cost:.2f}    ~Plants: ${total_plant_cost:.2f}    Subtotal: ${total_cost:.2f}    Total: ${total_cost + total_ship_cost:.2f}"
+        cost_line = f"~Shipping: ${ship_cost:.2f}    ~Plants: ${plant_cost:.2f}    Subtotal: ${subtotal:.2f}    ~Total: ${total_cost:.2f}"
         c.drawString(config.MARGIN, y_start, cost_line)
 
         # Move cursor downward slightly for final footer spacing
@@ -223,9 +236,12 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
 
     draw_header()
     num_items = 0
-    total_cost = 0.0
-    total_plant_cost = 0.0
-    total_ship_cost = 0.0
+    total_cost = customer_data.get('costs', {}).get('total_cost', 0.0)
+    plant_cost = customer_data.get('costs', {}).get('plant_cost', 0.0)
+    ship_cost = customer_data.get('costs', {}).get('ship_cost', 0.0)
+    subtotal = customer_data.get('costs', {}).get('subtotal', 0.0)
+
+    
 
     for item in customer_data['items']:
         # Default font for regular items
@@ -233,19 +249,6 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
 
         title = item['title']
         qty = item.get('quantity', 1)
-
-        if is_any_plant(title):
-            total_plant_cost += item.get('price', 0.0)
-        total_cost += item.get('price', 0.0)
-
-        if item['price'] > .99:
-            if total_ship_cost == 0.0:
-                total_ship_cost += FIRST_ITEM_SHIP_COST
-                if item["quantity"] > 1:
-                    total_ship_cost += ADDITIONAL_ITEM_SHIP_COST * item["quantity"] - 1
-            else:
-                total_ship_cost += ADDITIONAL_ITEM_SHIP_COST * item["quantity"]
-
 
         # If the item title is important, use the special font
         if is_important(title):
@@ -272,8 +275,9 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
         c.drawString(title_x, y_start, title)
 
         # --- Draw Price (right aligned) ---
+        qty_str = qty_str + " x " if qty > 1 else ""
         price = item.get("price", 0.0)
-        price_str = f"${price:,.2f}"
+        price_str = qty_str + f"${price:,.2f}"
         price_x = width - config.MARGIN
         c.setFont("Helvetica", 12)
         c.drawRightString(price_x, y_start, price_str)
@@ -528,6 +532,111 @@ def generate_holds_report(c, holds):
     # Save PDF
     c.showPage()
     return page_count
+
+def generate_hold_plants_report(c, holds):
+    """
+    Generates a PDF report listing all PLANTS and TC items that are on hold.
+    Uses holds[key]["items"] directly.
+
+    Sections:
+      - Plants on Hold (is_plant OR could_be_plant)
+      - TC on Hold (is_tc OR could_be_tc)
+
+    Alphabetical order, deduplicated.
+    Returns number of pages generated.
+    """
+    width, height = letter
+    margin = 50
+    line_height = 16
+    page_count = 1  # First page exists immediately
+    y = height - margin
+
+    plant_items = set()
+    tc_items = set()
+
+    # --- Collect items from holds ---
+    for hold in holds.values():
+        for item in hold.get("items", []):
+            title = item.get("title", "")
+
+            if is_plant(title) or could_be_plant(title):
+                plant_items.add(title)
+
+            if is_tc(title) or could_be_tc(title):
+                tc_items.add(title)
+
+    plant_items = sorted(plant_items, key=str.lower)
+    tc_items = sorted(tc_items, key=str.lower)
+
+    def draw_report_title():
+        """Draw the main report title at the top of the page."""
+        nonlocal y
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(
+            margin,
+            y,
+            f"Hold Items Report (as of {date.today().strftime('%Y-%m-%d')})"
+        )
+        y -= 2 * line_height
+
+    def new_page(section_title=None):
+        """Start a new page and redraw the report title and optional section title."""
+        nonlocal y, page_count
+        c.showPage()
+        page_count += 1
+        y = height - margin
+        draw_report_title()
+        if section_title:
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(margin, y, section_title)
+            y -= line_height
+            c.setFont("Helvetica", 10)
+
+    # --- Draw title on first page ---
+    draw_report_title()
+
+    # --- Plants section ---
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(margin, y, "Plants on Hold")
+    y -= line_height
+    c.setFont("Helvetica", 10)
+
+    if not plant_items:
+        c.drawString(margin, y, "None")
+        y -= line_height
+    else:
+        for plant in plant_items:
+            if y < margin + line_height:
+                new_page("Plants on Hold (cont'd)")
+            c.drawString(margin, y, plant)
+            y -= line_height
+
+    # --- Space between sections ---
+    y -= line_height
+
+    # --- TC section ---
+    if y < margin + 4 * line_height:
+        new_page("TC on Hold")
+    else:
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(margin, y, "TC on Hold")
+        y -= line_height
+        c.setFont("Helvetica", 10)
+
+    if not tc_items:
+        c.drawString(margin, y, "None")
+        y -= line_height
+    else:
+        for tc in tc_items:
+            if y < margin + line_height:
+                new_page("TC on Hold (cont'd)")
+            c.drawString(margin, y, tc)
+            y -= line_height
+
+    # --- Done ---
+    c.showPage()
+    return page_count
+
 
 def generate_conflicts_report(c, conflicts, max_width=470):
     """

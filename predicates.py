@@ -18,6 +18,13 @@ def is_important(title):
                        , "insulation", "cryo", "mystery", "ship"]
     return any(word in title.lower() for word in important_words)
 
+def is_2_day(title):
+    title = title.lower()
+    return "2-day" in title or "2 day" in title
+
+def is_next_day(title):
+    title = title.lower()
+    return "next day" in title or "nextday" in title or "overnight" in title
 def is_gear(title):
     title = title.lower()
     return (
@@ -51,7 +58,7 @@ def is_plant(title):
 
 def could_be_tc(title):
     title = title.lower()
-    return "tc" in title and not is_gear(title)
+    return "tc" in title and not is_gear(title) and not is_important(title)
 
 def could_be_plant(title):
     title = title.lower()
