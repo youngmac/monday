@@ -315,7 +315,7 @@ def run_gui():
     progress_label = tk.Label(root, text="")
     progress_label.pack()
 
-    bypass_holds_var = tk.BooleanVar(value=False)
+    bypass_holds_var = tk.BooleanVar(value=True)
 
     bypass_holds_check = tk.Checkbutton(
         root,

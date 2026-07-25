@@ -68,6 +68,12 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
         state = row.get("State") or ""
         zip_code = row.get("Zip/Postal Code") or ""
 
+        # skip all non ready to ship orders
+        order_status = row.get("Order Status") or "Ready to Ship"
+        if order_status != "Ready to Ship":
+            continue
+
+
         # Construct full address for conflict tracking (no normalization)
         address = f"{street_1}, " + (f"{street_2}, " if street_2 else "") + f"{city}, {state} {zip_code}"
 
@@ -77,6 +83,9 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
 
         # --- Group items ---
         title = row.get("Item Title") or ""
+        # Mothers day line too long
+        if "!!" in title and title.startswith("Mothers"):
+            title = "!!" + title.split("!!", 1)[-1]
         price = float(row.get("Item Price") or 0)
         quantity = int(row.get("Quantity") or 0)
         time = row.get("Order Date(PDT)") or ""
@@ -120,6 +129,8 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
         ship_cost = 0.0
         for item_key in grouped_data[key]["items"]:
             item = grouped_data[key]["items"][item_key]
+
+            item["price"] /= item["quantity"]
 
             # plant/subtotal
             subtotal += item.get('price', 0.0) * item.get('quantity', 1)

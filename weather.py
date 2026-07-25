@@ -66,13 +66,19 @@ def get_forecast(lat, lon):
     }
 
     for i in range(0, 10):
+        success = False
         try:
-            response = requests.get(url, params=params)
-            break  # success → exit loop
+            try:
+                response = requests.get(url, params=params)
+                success = True
+                break  # success → exit loop
+            except:
+                print("Failed to extract weather. Wait 10 seconds")
+                time.sleep(10)
         except:
-            print("Failed to extract weather. Wait 10 seconds")
-            time.sleep(10)
-    response.raise_for_status()
+            response.raise_for_status()
+        if not success:
+            return None
     return response.json()
 
 
@@ -96,5 +102,7 @@ def get_alerting_forecast(address):
     if lat == 0 and lon == 0:
         return {}
     forecast = get_forecast(lat, lon)
+    if forecast == None:
+        return {}
     result = check_extreme_temps(forecast)
     return result

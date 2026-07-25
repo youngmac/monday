@@ -11,7 +11,7 @@ import calendar
 
 def is_important(title):
     title = title.lower()
-    if "heat" in title and "pack" in title:
+    if ("heat" in title or "cold" in title) and "pack" in title:
         return True
     important_words = ["hold", "cancel", "ups", "next", "2-day", "2 day"
                        , "overnight", "express", "priority", "hook me up"
@@ -20,11 +20,11 @@ def is_important(title):
 
 def is_2_day(title):
     title = title.lower()
-    return "2-day" in title or "2 day" in title
+    return "2-day" in title or "2 day" in title or ("2nd" in title and "day" in title)
 
 def is_next_day(title):
     title = title.lower()
-    return "next day" in title or "nextday" in title or "overnight" in title
+    return "next day" in title or "nextday" in title or "overnight" in title or ("1st" in title and "day" in title)
 def is_gear(title):
     title = title.lower()
     return (
