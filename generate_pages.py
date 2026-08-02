@@ -146,12 +146,19 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
         if customer_data["2day"]:
             y_start -= 22
             c.setFont("Helvetica-Bold", 14)
-            c.drawString(config.MARGIN, y_start, "                    ** 2-DAY AIR UPS SHIPPING **")
+            c.drawString(config.MARGIN, y_start, "          ** 2-DAY AIR UPS SHIPPING **")
             y_start += 20
         if customer_data["1day"]:
             y_start -= 22
             c.setFont("Helvetica-Bold", 14)
-            c.drawString(config.MARGIN, y_start, "                    ** NEXT DAY AIR UPS SHIPPING **")
+            c.drawString(config.MARGIN, y_start, "          ** NEXT DAY AIR UPS SHIPPING **")
+            y_start += 20
+        if not customer_data["1day"] and not customer_data["2day"]:
+            transit_times = customer_data["transit_times"]
+            y_start -= 22
+            c.setFont("Helvetica-Oblique", 14)
+            transit_times_str = f"PRIORITY: {transit_times['usps_priority_mail']}    GRND ADV: {transit_times['usps_ground_advantage']}    UPS GRND: {transit_times['ups_ground']}"
+            c.drawString(config.MARGIN, y_start, "          " +transit_times_str)
             y_start += 20
 
         # Add the weather forecast chart
@@ -213,6 +220,7 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
         nonlocal ship_cost
         nonlocal subtotal
         nonlocal y_start
+        nonlocal num_pages
 
         # Height needed for this footer line
         line_height = 16
@@ -221,6 +229,7 @@ def generate_pick_sheet(c, customer_data, boxed=False, double_boxed=False):
         if y_start < config.MARGIN + line_height + 60:
             draw_footer()
             c.showPage()
+            num_pages += 1
             # reset page and header
             y_start = height - config.MARGIN - 30
             draw_header()

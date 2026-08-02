@@ -7,6 +7,9 @@ import os
 import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+from est_transit_times import ShippingTransitTime
+
+shipping_transit_time = ShippingTransitTime() # global instance for caching
 
 # ===================================================================
 #                           PROCESSING FUNCTIONS
@@ -69,7 +72,7 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
     if file2 is None:
         # ---------------- SINGLE FILE MODE ----------------
         data = excel_to_dicts(file1)
-        grouped_data, conflicts = group_data(data)
+        grouped_data, conflicts = group_data(data, shipping_transit_time)
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
@@ -94,12 +97,12 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
         # ---------------- TWO FILE MODE ----------------
         datas = []
         for file in [file1, file2]:
-            grouped_data, _ = group_data(excel_to_dicts(file))
+            grouped_data, _ = group_data(excel_to_dicts(file), shipping_transit_time)
             _, max_date = get_date_range(grouped_data)
             datas.append({"grouped_data": grouped_data, "date": max_date})
 
         # only use for conflicts initialization
-        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2))  # initialize conflicts
+        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2), shipping_transit_time)  # initialize conflicts
 
         datas.sort(key=lambda item: item["date"], reverse=True)
 
@@ -152,7 +155,7 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
             datas.append({"grouped_data": grouped_data, "date": max_date})
 
         # only use for conflicts initialization
-        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2))  # initialize conflicts
+        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2), shipping_transit_time)  # initialize conflicts
 
         datas.sort(key=lambda item: item["date"], reverse=True)
 
@@ -188,7 +191,7 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
 
         # ---------------- ADD IN THIRD FILE ----------------
-        grouped_data3, _ = group_data(excel_to_dicts(file3))
+        grouped_data3, _ = group_data(excel_to_dicts(file3), shipping_transit_time)
         _, max_date3 = get_date_range(grouped_data3)
         sorted_grouped_data3 = sort_grouped_data(grouped_data3)
 
@@ -364,6 +367,7 @@ def run_gui():
 
 if __name__ == "__main__":
     try:
-        run_gui()
+        run_processing("default4.xlsx", bypass_future_hold=True)  # For testing without GUI
+        # run_gui()
     except Exception as e:
         print(f"An error occurred: {e}")

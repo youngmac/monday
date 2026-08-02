@@ -1,7 +1,9 @@
 from datetime import datetime
+import config
 from openpyxl import load_workbook
 from pathlib import Path
 from collections import Counter
+from est_transit_times import ShippingTransitTime
 from predicates import is_important, is_tc, is_plant, could_be_tc, could_be_plant, is_any_plant, is_future_hold, is_2_day, is_next_day
 from config import TWO_DAY_SHIP_COST, FIRST_ITEM_SHIP_COST, ADDITIONAL_ITEM_SHIP_COST, NEXT_DAY_SHIP_COST
 
@@ -38,7 +40,7 @@ def name_address_to_key(row: dict) -> str:
     )
 
 
-def group_data(data: list[dict]) -> tuple[dict, dict]:
+def group_data(data: list[dict], shipping_transit_time: ShippingTransitTime) -> tuple[dict, dict]:
     """
     Groups rows by recipient's name and address.
     Combines items with the same title by summing quantity.
@@ -95,6 +97,8 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
                 "name": row.get("Recipient Name") or "",
                 "username": username,
                 "address": address,
+                # "zip": zip_code,
+                # "city": city,
                 "state": state,
                 "items": {},
             }
@@ -107,6 +111,10 @@ def group_data(data: list[dict]) -> tuple[dict, dict]:
             grouped_data[key]["1day"] = False
         if is_next_day(title):
             grouped_data[key]["1day"] = True
+
+        if "transit_times" not in grouped_data[key]:
+            print(f"Fetching transit times for {username} at {zip_code}...")
+            grouped_data[key]["transit_times"] = shipping_transit_time.get_all_transit_times(config.ORIGIN_ZIP, zip_code, city, state)
 
         items = grouped_data[key]["items"]
         if title in items:
@@ -232,13 +240,15 @@ def sort_grouped_data(grouped_data):
             return lambda x: item_count(x[1]["items"])
         elif key == "Earliest Order Date":
             return lambda x: earliest_date(x[1]["items"])
+        elif key == "Time in Transit":
+            return lambda x: x[1]["transit_times"].get("ups_ground", float('inf'))
         else:
             return None
 
     data = list(grouped_data.items())
 
     # Apply sorting from lowest to highest priority (reversed)
-    for key, order in reversed(list(zip(["Size", "Name"], ["Descending", "Ascending"]))):
+    for key, order in reversed(list(zip(["Time in Transit","Size", "Name"], ["Descending", "Descending", "Ascending"]))):
         key_func = get_sort_key_func(key)
         if key_func:
             reverse = order == "Descending"
