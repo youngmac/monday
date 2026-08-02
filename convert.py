@@ -310,14 +310,6 @@ def run_gui():
     file3_label = tk.Label(root, text="No third file selected")
     file3_label.pack()
 
-    # pdf progress bar and label
-    progress_var = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
-    progress_bar.pack(fill='x', padx=20, pady=10)
-
-    progress_label = tk.Label(root, text="")
-    progress_label.pack()
-
     # Transit API progress
     transit_progress_var = tk.DoubleVar()
 
@@ -331,6 +323,14 @@ def run_gui():
 
     transit_progress_label = tk.Label(root, text="")
     transit_progress_label.pack()
+
+    # pdf progress bar and label
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+    progress_bar.pack(fill='x', padx=20, pady=10)
+
+    progress_label = tk.Label(root, text="")
+    progress_label.pack()
 
     bypass_holds_var = tk.BooleanVar(value=True)
 
@@ -348,8 +348,8 @@ def run_gui():
         root.update_idletasks()
 
     def update_transit_progress(value, key):
-        progress_var.set(value)
-        progress_label.config(text=f"Transit Lookup: {key}")
+        transit_progress_var.set(value)
+        transit_progress_label.config(text=f"Transit Lookup: {key}")
         root.update_idletasks()
 
     def on_run():

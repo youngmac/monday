@@ -213,7 +213,7 @@ class UPSApi:
         """
         Returns UPS Ground transit time in days.
         """
-        return 0
+        # return 0
 
         endpoint = (
             f"{self.BASE_URL}"
@@ -272,6 +272,12 @@ class ShippingTransitTime:
         """
         Returns all available transit times in a consistent format.
         """
+
+        # return { # toggle to turn off api usage
+        #     "usps_priority_mail": 0,
+        #     "usps_ground_advantage": 0,
+        #     "ups_ground": 0
+        # }
 
         cache_key = (origin_zip, destination_zip, destination_city, destination_state)
 
