@@ -62,7 +62,7 @@ def generate_pages(c, sorted_grouped_data, aggregated_data, plants, holds, max_d
 
     return groups
 
-def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass_future_hold=False):
+def run_processing(file1, file2=None, file3=None, progress_callback=None, transit_progress_callback=None, bypass_future_hold=False):
     """Runs your existing logic. file2 may be None."""
     bypass_future_hold = bool(bypass_future_hold)
     file1 = Path(file1)
@@ -72,7 +72,7 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
     if file2 is None:
         # ---------------- SINGLE FILE MODE ----------------
         data = excel_to_dicts(file1)
-        grouped_data, conflicts = group_data(data, shipping_transit_time)
+        grouped_data, conflicts = group_data(data, shipping_transit_time, transit_progress_callback)
         _, max_date = get_date_range(grouped_data)
         formatted = max_date.strftime("%A_%m-%d-%y")
         sorted_grouped_data = sort_grouped_data(grouped_data)
@@ -97,12 +97,12 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
         # ---------------- TWO FILE MODE ----------------
         datas = []
         for file in [file1, file2]:
-            grouped_data, _ = group_data(excel_to_dicts(file), shipping_transit_time)
+            grouped_data, _ = group_data(excel_to_dicts(file), shipping_transit_time, transit_progress_callback)
             _, max_date = get_date_range(grouped_data)
             datas.append({"grouped_data": grouped_data, "date": max_date})
 
         # only use for conflicts initialization
-        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2), shipping_transit_time)  # initialize conflicts
+        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2), shipping_transit_time, transit_progress_callback)  # initialize conflicts
 
         datas.sort(key=lambda item: item["date"], reverse=True)
 
@@ -150,12 +150,12 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
          # ---------------- START W TWO FILE MODE ----------------
         datas = []
         for file in [file1, file2]:
-            grouped_data, _ = group_data(excel_to_dicts(file))
+            grouped_data, _ = group_data(excel_to_dicts(file), shipping_transit_time, transit_progress_callback)
             _, max_date = get_date_range(grouped_data)
             datas.append({"grouped_data": grouped_data, "date": max_date})
 
         # only use for conflicts initialization
-        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2), shipping_transit_time)  # initialize conflicts
+        _, conflicts = group_data(excel_to_dicts(file1) + excel_to_dicts(file2), shipping_transit_time, transit_progress_callback)  # initialize conflicts
 
         datas.sort(key=lambda item: item["date"], reverse=True)
 
@@ -191,7 +191,7 @@ def run_processing(file1, file2=None, file3=None, progress_callback=None, bypass
         sorted_grouped_data = dict(sorted(sorted_grouped_data1.items(), key=lambda x: x[1].get('uid', 0)))
 
         # ---------------- ADD IN THIRD FILE ----------------
-        grouped_data3, _ = group_data(excel_to_dicts(file3), shipping_transit_time)
+        grouped_data3, _ = group_data(excel_to_dicts(file3), shipping_transit_time, transit_progress_callback)
         _, max_date3 = get_date_range(grouped_data3)
         sorted_grouped_data3 = sort_grouped_data(grouped_data3)
 
@@ -310,13 +310,27 @@ def run_gui():
     file3_label = tk.Label(root, text="No third file selected")
     file3_label.pack()
 
-    # Progress bar and label
+    # pdf progress bar and label
     progress_var = tk.DoubleVar()
     progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
     progress_bar.pack(fill='x', padx=20, pady=10)
 
     progress_label = tk.Label(root, text="")
     progress_label.pack()
+
+    # Transit API progress
+    transit_progress_var = tk.DoubleVar()
+
+    transit_progress_bar = ttk.Progressbar(
+        root,
+        variable=transit_progress_var,
+        maximum=100
+    )
+
+    transit_progress_bar.pack(fill='x', padx=20, pady=10)
+
+    transit_progress_label = tk.Label(root, text="")
+    transit_progress_label.pack()
 
     bypass_holds_var = tk.BooleanVar(value=True)
 
@@ -331,6 +345,11 @@ def run_gui():
     def update_progress(value, key):
         progress_var.set(value)
         progress_label.config(text=f"Processing: {key}")
+        root.update_idletasks()
+
+    def update_transit_progress(value, key):
+        progress_var.set(value)
+        progress_label.config(text=f"Transit Lookup: {key}")
         root.update_idletasks()
 
     def on_run():
@@ -349,6 +368,7 @@ def run_gui():
                 file2,
                 file3,
                 progress_callback=update_progress,
+                transit_progress_callback=update_transit_progress,
                 bypass_future_hold=bypass_holds
             )
             progress_var.set(100)
@@ -367,7 +387,7 @@ def run_gui():
 
 if __name__ == "__main__":
     try:
-        run_processing("default4.xlsx", bypass_future_hold=True)  # For testing without GUI
-        # run_gui()
+        # run_processing("default4.xlsx", bypass_future_hold=True)  # For testing without GUI
+        run_gui()
     except Exception as e:
         print(f"An error occurred: {e}")

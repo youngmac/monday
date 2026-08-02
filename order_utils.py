@@ -40,7 +40,7 @@ def name_address_to_key(row: dict) -> str:
     )
 
 
-def group_data(data: list[dict], shipping_transit_time: ShippingTransitTime) -> tuple[dict, dict]:
+def group_data(data: list[dict], shipping_transit_time: ShippingTransitTime, transit_progress_callback=None) -> tuple[dict, dict]:
     """
     Groups rows by recipient's name and address.
     Combines items with the same title by summing quantity.
@@ -55,6 +55,9 @@ def group_data(data: list[dict], shipping_transit_time: ShippingTransitTime) -> 
         }
     """
     grouped_data = {}
+
+    current_index = 0
+    total_customers = len(data)
 
     # Track username/address relationships for conflict detection
     address_to_usernames = {}
@@ -111,6 +114,13 @@ def group_data(data: list[dict], shipping_transit_time: ShippingTransitTime) -> 
             grouped_data[key]["1day"] = False
         if is_next_day(title):
             grouped_data[key]["1day"] = True
+
+        if transit_progress_callback:
+            transit_progress_callback(
+                (current_index / total_customers) * 100,
+                username
+            )
+            current_index += 1
 
         if "transit_times" not in grouped_data[key]:
             print(f"Fetching transit times for {username} at {zip_code}...")
@@ -181,6 +191,8 @@ def group_data(data: list[dict], shipping_transit_time: ShippingTransitTime) -> 
         "username_conflicts": username_conflicts,
     }
 
+    if transit_progress_callback:
+        transit_progress_callback(100, "Done")
     return grouped_data, conflicts
 
 
